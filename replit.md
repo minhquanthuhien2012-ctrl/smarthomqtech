@@ -36,6 +36,14 @@ Located at `artifacts/mcp-server/`. Implements the Model Context Protocol over s
 - `get_current_time` — thời gian hiện tại theo múi giờ
 - `echo` — lặp lại & biến đổi chuỗi
 - `fetch_url` — lấy nội dung từ URL
+- `gdrive_list_files` — liệt kê file trong Google Drive
+- `gdrive_read_file` — đọc nội dung file Google Docs/Sheets/Slides/text
+- `gdrive_search` — tìm kiếm file theo tên hoặc nội dung
+
+**Secrets cần thiết:**
+- `GOOGLE_SERVICE_ACCOUNT_JSON` — JSON key của Google Service Account (đã cấu hình)
+  - Service Account phải được chia sẻ quyền đọc trên file/folder Drive muốn truy cập
+  - Cần bật Google Drive API, Google Docs API, Google Sheets API trong Google Cloud Console
 
 **Built-in resources:**
 - `mcp://workspace/server-info` — thông tin server
