@@ -1,208 +1,316 @@
 import { useState, useRef, useEffect } from "react";
-import { Send, Loader2, Bot, User, HardDrive, Calculator, Globe } from "lucide-react";
+import { Send, Loader2, Bot, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { useListAnthropicMessages, useCreateAnthropicConversation, getListAnthropicConversationsQueryKey } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
-import { useChatStream } from "@/hooks/use-chat-stream";
 import { MarkdownRenderer } from "@/components/markdown-renderer";
+import {
+  useListAnthropicMessages,
+  getListAnthropicMessagesQueryKey,
+  useCreateAnthropicConversation,
+  getListAnthropicConversationsQueryKey,
+} from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 
 interface ChatAreaProps {
   conversationId: number | null;
   onConversationCreated: (id: number) => void;
 }
 
+interface LocalMessage {
+  role: "user" | "assistant";
+  content: string;
+  isStreaming?: boolean;
+}
+
+interface ToolCall {
+  name: string;
+  status: "starting" | "running" | "done" | "error";
+}
+
+const TOOL_LABELS: Record<string, string> = {
+  calculator: "Đang tính toán",
+  get_current_time: "Đang lấy thời gian",
+  fetch_url: "Đang lấy nội dung URL",
+  gdrive_list_files: "Đang liệt kê Google Drive",
+  gdrive_read_file: "Đang đọc tài liệu Google Drive",
+  gdrive_search: "Đang tìm kiếm Google Drive",
+  echo: "Đang xử lý",
+};
+
+function toolLabel(name: string) {
+  return TOOL_LABELS[name] ?? `Đang dùng công cụ: ${name}`;
+}
+
 export function ChatArea({ conversationId, onConversationCreated }: ChatAreaProps) {
   const [input, setInput] = useState("");
+  const [streamingMessages, setStreamingMessages] = useState<LocalMessage[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [activeTools, setActiveTools] = useState<ToolCall[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
-  
-  const { data: messages, isLoading } = useListAnthropicMessages(conversationId || 0, {
-    query: { enabled: !!conversationId }
-  });
-  
   const createConversation = useCreateAnthropicConversation();
-  const { sendMessage, streamedMessage, isStreaming } = useChatStream(conversationId);
 
-  const scrollToBottom = () => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollIntoView({ behavior: "smooth" });
+  const { data: savedMessages, isLoading: loadingMessages } = useListAnthropicMessages(
+    conversationId ?? 0,
+    { query: { enabled: !!conversationId, queryKey: getListAnthropicMessagesQueryKey(conversationId ?? 0) } }
+  );
+
+  useEffect(() => {
+    setStreamingMessages([]);
+    setActiveTools([]);
+    setLoading(false);
+  }, [conversationId]);
+
+  useEffect(() => {
+    scrollRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [savedMessages, streamingMessages, activeTools]);
+
+  const sendMessage = async (convId: number, content: string) => {
+    setLoading(true);
+    setStreamingMessages(prev => [...prev, { role: "assistant", content: "", isStreaming: true }]);
+    setActiveTools([]);
+
+    try {
+      const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+      const response = await fetch(`${BASE}/api/anthropic/conversations/${convId}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content }),
+      });
+
+      if (!response.ok || !response.body) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          const jsonStr = line.slice(6).trim();
+          if (!jsonStr) continue;
+
+          try {
+            const event = JSON.parse(jsonStr) as {
+              content?: string;
+              tool_call?: { name: string; status: string };
+              done?: boolean;
+              error?: string;
+            };
+
+            if (event.content) {
+              setStreamingMessages(prev => {
+                const updated = [...prev];
+                const last = updated[updated.length - 1];
+                if (last?.isStreaming) {
+                  updated[updated.length - 1] = { ...last, content: last.content + event.content };
+                }
+                return updated;
+              });
+            }
+
+            if (event.tool_call) {
+              const { name, status } = event.tool_call;
+              setActiveTools(prev => {
+                const idx = prev.findIndex(t => t.name === name && t.status !== "done" && t.status !== "error");
+                if (idx >= 0) {
+                  const updated = [...prev];
+                  updated[idx] = { name, status: status as ToolCall["status"] };
+                  return updated;
+                }
+                return [...prev, { name, status: status as ToolCall["status"] }];
+              });
+              if (status === "done" || status === "error") {
+                setTimeout(() => {
+                  setActiveTools(prev => prev.filter(t => !(t.name === name && (t.status === "done" || t.status === "error"))));
+                }, 1500);
+              }
+            }
+
+            if (event.done) {
+              setStreamingMessages(prev => {
+                const updated = [...prev];
+                const last = updated[updated.length - 1];
+                if (last?.isStreaming) {
+                  updated[updated.length - 1] = { ...last, isStreaming: false };
+                }
+                return updated;
+              });
+              await queryClient.invalidateQueries({ queryKey: getListAnthropicMessagesQueryKey(convId) });
+              await queryClient.invalidateQueries({ queryKey: getListAnthropicConversationsQueryKey() });
+              setStreamingMessages([]);
+              setActiveTools([]);
+            }
+
+            if (event.error) {
+              setStreamingMessages(prev => {
+                const updated = [...prev];
+                const last = updated[updated.length - 1];
+                if (last?.isStreaming) {
+                  updated[updated.length - 1] = { ...last, content: `Lỗi: ${event.error}`, isStreaming: false };
+                }
+                return updated;
+              });
+            }
+          } catch {
+            // skip unparseable SSE lines
+          }
+        }
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setStreamingMessages(prev => {
+        const updated = [...prev];
+        const last = updated[updated.length - 1];
+        if (last?.isStreaming) {
+          updated[updated.length - 1] = { ...last, content: `Lỗi kết nối: ${msg}`, isStreaming: false };
+        }
+        return updated;
+      });
+    } finally {
+      setLoading(false);
     }
   };
 
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages, streamedMessage]);
-
-  const handleSubmit = async (e?: React.FormEvent) => {
-    e?.preventDefault();
-    if (!input.trim() || isStreaming) return;
-
-    const messageText = input.trim();
+  const handleSend = async () => {
+    const content = input.trim();
+    if (!content || loading) return;
     setInput("");
 
-    if (!conversationId) {
-      createConversation.mutate(
-        { data: { title: messageText.slice(0, 40) + (messageText.length > 40 ? "..." : "") } },
-        {
-          onSuccess: async (data) => {
-            queryClient.invalidateQueries({ queryKey: getListAnthropicConversationsQueryKey() });
-            onConversationCreated(data.id);
-            // Wait for the new ID to be set before sending message
-            // In a real app we might want a more robust way to handle the sequence
-            setTimeout(() => {
-              // Note: using the returned hook from useChatStream might have stale ID, 
-              // but we are relying on React state to update. For simplicity, we just trigger it.
-            }, 100);
-          }
-        }
-      );
-      return;
+    setStreamingMessages(prev => [...prev, { role: "user", content }]);
+
+    let convId = conversationId;
+    if (!convId) {
+      const title = content.slice(0, 40) + (content.length > 40 ? "..." : "");
+      const conv = await createConversation.mutateAsync({ data: { title } });
+      convId = conv.id;
+      await queryClient.invalidateQueries({ queryKey: getListAnthropicConversationsQueryKey() });
+      onConversationCreated(convId);
     }
 
-    // Optimistically show user message by updating cache or just relying on fast network
-    await sendMessage(messageText);
+    await sendMessage(convId, content);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      handleSubmit();
+      void handleSend();
     }
   };
 
-  const getToolIcon = (name: string) => {
-    if (name.includes("drive")) return <HardDrive className="h-3 w-3 mr-1" />;
-    if (name.includes("calc")) return <Calculator className="h-3 w-3 mr-1" />;
-    if (name.includes("fetch")) return <Globe className="h-3 w-3 mr-1" />;
-    return <Loader2 className="h-3 w-3 mr-1 animate-spin" />;
-  };
+  const allMessages: LocalMessage[] = [
+    ...((savedMessages ?? []).map(m => ({ role: m.role as "user" | "assistant", content: m.content }))),
+    ...streamingMessages,
+  ];
 
-  const getToolText = (name: string) => {
-    if (name.includes("google_drive")) return "Đang đọc Google Drive...";
-    if (name.includes("calculator")) return "Đang tính toán...";
-    if (name.includes("fetch")) return "Đang truy cập web...";
-    return `Đang gọi ${name}...`;
-  };
+  const isEmpty = !conversationId && allMessages.length === 0;
 
   return (
-    <div className="flex flex-col h-screen flex-1 bg-background relative overflow-hidden">
-      {!conversationId ? (
-        <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
-          <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mb-6 shadow-xl shadow-primary/5 border border-primary/20">
-            <Bot className="h-8 w-8 text-primary" />
-          </div>
-          <h2 className="text-2xl font-semibold mb-2 tracking-tight">Trợ lý AI Cá nhân</h2>
-          <p className="text-muted-foreground max-w-md">
-            Hỏi về tài liệu Google Drive, thực hiện tính toán, hoặc tìm kiếm thông tin theo thời gian thực.
-          </p>
-        </div>
-      ) : (
-        <ScrollArea className="flex-1 px-4 py-6 md:px-8">
-          <div className="max-w-3xl mx-auto space-y-6 pb-24">
-            {isLoading ? (
-              <div className="flex justify-center py-8">
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+    <div className="flex flex-col flex-1 h-screen overflow-hidden">
+      <div className="px-6 py-4 border-b border-border shrink-0">
+        <h1 className="text-sm font-medium text-muted-foreground tracking-wide">Trợ lý AI</h1>
+      </div>
+
+      <ScrollArea className="flex-1">
+        <div className="max-w-3xl mx-auto px-4 py-8 space-y-6">
+          {isEmpty && (
+            <div className="flex flex-col items-center justify-center py-24 gap-4 text-center">
+              <div className="w-16 h-16 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center">
+                <Bot className="h-8 w-8 text-primary/60" />
               </div>
-            ) : (
-              <>
-                {messages?.map((msg) => (
-                  <div
-                    key={msg.id}
-                    className={`flex gap-4 ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-                  >
-                    {msg.role === "assistant" && (
-                      <div className="w-8 h-8 rounded-full bg-secondary/80 border border-border flex items-center justify-center shrink-0 mt-1">
-                        <Bot className="h-4 w-4 text-foreground/80" />
-                      </div>
+              <div className="space-y-1">
+                <p className="font-medium text-foreground">Bắt đầu trò chuyện</p>
+                <p className="text-muted-foreground text-sm max-w-xs">
+                  Hỏi về tài liệu Google Drive, tính toán, lấy nội dung web, hoặc bất cứ điều gì.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {loadingMessages && conversationId && (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            </div>
+          )}
+
+          {!loadingMessages && allMessages.map((msg, idx) => (
+            <div key={idx} className={`flex gap-3 ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+              {msg.role === "assistant" && (
+                <div className="w-7 h-7 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0 mt-1">
+                  <Bot className="h-3.5 w-3.5 text-primary" />
+                </div>
+              )}
+
+              <div className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm ${
+                msg.role === "user"
+                  ? "bg-primary text-primary-foreground rounded-br-sm"
+                  : "bg-secondary text-foreground rounded-bl-sm"
+              }`}>
+                {msg.role === "user" ? (
+                  <p className="whitespace-pre-wrap leading-relaxed">{msg.content}</p>
+                ) : (
+                  <div className="min-h-[1em]">
+                    {msg.content ? (
+                      <MarkdownRenderer content={msg.content} />
+                    ) : (
+                      <span className="inline-block w-2 h-4 bg-current animate-pulse rounded-sm" />
                     )}
-                    
-                    <div
-                      className={`max-w-[85%] rounded-2xl px-5 py-3.5 shadow-sm ${
-                        msg.role === "user"
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-secondary/50 border border-border text-foreground"
-                      }`}
-                    >
-                      {msg.role === "user" ? (
-                        <div className="whitespace-pre-wrap">{msg.content}</div>
-                      ) : (
-                        <MarkdownRenderer content={msg.content} />
-                      )}
-                    </div>
-                    
-                    {msg.role === "user" && (
-                      <div className="w-8 h-8 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center shrink-0 mt-1">
-                        <User className="h-4 w-4 text-primary" />
-                      </div>
-                    )}
-                  </div>
-                ))}
-                
-                {streamedMessage && (
-                  <div className="flex gap-4 justify-start">
-                    <div className="w-8 h-8 rounded-full bg-secondary/80 border border-border flex items-center justify-center shrink-0 mt-1">
-                      <Bot className="h-4 w-4 text-foreground/80" />
-                    </div>
-                    
-                    <div className="max-w-[85%] rounded-2xl px-5 py-3.5 shadow-sm bg-secondary/50 border border-border text-foreground">
-                      {streamedMessage.toolCalls && streamedMessage.toolCalls.length > 0 && (
-                        <div className="flex flex-col gap-2 mb-3">
-                          {streamedMessage.toolCalls.map((tool, idx) => (
-                            <div key={idx} className="flex items-center text-xs text-muted-foreground bg-background/50 px-3 py-1.5 rounded-full border border-border w-fit font-medium">
-                              {getToolIcon(tool.name)}
-                              {getToolText(tool.name)}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                      
-                      {streamedMessage.content ? (
-                        <MarkdownRenderer content={streamedMessage.content} />
-                      ) : isStreaming && (!streamedMessage.toolCalls || streamedMessage.toolCalls.length === 0) ? (
-                        <div className="flex gap-1 h-6 items-center">
-                          <span className="w-2 h-2 rounded-full bg-primary/50 animate-bounce" style={{ animationDelay: "0ms" }}></span>
-                          <span className="w-2 h-2 rounded-full bg-primary/50 animate-bounce" style={{ animationDelay: "150ms" }}></span>
-                          <span className="w-2 h-2 rounded-full bg-primary/50 animate-bounce" style={{ animationDelay: "300ms" }}></span>
-                        </div>
-                      ) : null}
-                    </div>
                   </div>
                 )}
-              </>
-            )}
-            <div ref={scrollRef} />
-          </div>
-        </ScrollArea>
-      )}
+              </div>
 
-      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-background via-background to-transparent pt-10 pb-6 px-4 md:px-8">
-        <div className="max-w-3xl mx-auto relative">
-          <form
-            onSubmit={handleSubmit}
-            className="relative flex items-end gap-2 bg-card border border-border rounded-3xl p-2 shadow-lg shadow-black/5 focus-within:ring-1 focus-within:ring-primary/50 transition-all"
-          >
+              {msg.role === "user" && (
+                <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center shrink-0 mt-1">
+                  <User className="h-3.5 w-3.5 text-primary" />
+                </div>
+              )}
+            </div>
+          ))}
+
+          {activeTools.filter(t => t.status === "starting" || t.status === "running").map((tool, idx) => (
+            <div key={idx} className="flex items-center gap-2 text-xs text-muted-foreground pl-10">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              <span>{toolLabel(tool.name)}...</span>
+            </div>
+          ))}
+
+          <div ref={scrollRef} />
+        </div>
+      </ScrollArea>
+
+      <div className="px-4 pb-5 pt-3 border-t border-border shrink-0">
+        <div className="max-w-3xl mx-auto">
+          <div className="flex gap-2 items-end bg-secondary/40 border border-border rounded-2xl px-3 py-2 focus-within:border-primary/40 transition-colors">
             <Textarea
               value={input}
-              onChange={(e) => setInput(e.target.value)}
+              onChange={e => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Nhập tin nhắn... (Enter để gửi)"
-              className="min-h-[44px] max-h-32 resize-none border-0 focus-visible:ring-0 shadow-none bg-transparent py-3 px-4 text-base scrollbar-hide"
+              placeholder="Nhắn tin với trợ lý..."
+              className="flex-1 resize-none border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 text-sm min-h-[40px] max-h-[200px] placeholder:text-muted-foreground/50 p-0 pt-1"
               rows={1}
             />
             <Button
-              type="submit"
+              onClick={() => void handleSend()}
+              disabled={loading || !input.trim()}
               size="icon"
-              disabled={!input.trim() || isStreaming}
-              className="h-10 w-10 shrink-0 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 transition-colors mb-1 mr-1"
+              className="shrink-0 h-8 w-8 rounded-xl mb-0.5"
             >
-              {isStreaming ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4 ml-0.5" />}
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
             </Button>
-          </form>
-          <div className="text-center mt-3 text-xs text-muted-foreground/60 font-medium">
-            AI có thể mắc lỗi. Vui lòng kiểm tra lại thông tin quan trọng.
           </div>
+          <p className="text-center text-xs text-muted-foreground/30 mt-2">
+            Enter gửi tin — Shift+Enter xuống dòng
+          </p>
         </div>
       </div>
     </div>
