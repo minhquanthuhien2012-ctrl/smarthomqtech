@@ -58,11 +58,22 @@ Các trang quan trọng cần biết:
 - Aptomat thông minh: https://smarthomeq.tech/danh-muc/thiet-bi-aptomat/
 - Loa thông minh: https://smarthomeq.tech/danh-muc/loa-thong-minh/
 
+== GIÁ & BẢO HÀNH ==
+**Lưu ý về giá:**
+- Giá hiển thị trên website là giá chưa bao gồm VAT (chưa có hóa đơn)
+- Giá chưa bao gồm công lắp đặt
+- Khi báo giá cho khách, luôn nhắc rõ 2 điều này để tránh hiểu nhầm
+
+**Bảo hành:**
+- Có 2 gói bảo hành: **1 tháng** hoặc **12 tháng**
+- Khi khách hỏi về bảo hành, hãy giới thiệu cả 2 option và để khách chọn
+
 Quy trình trả lời:
 1. Xác định loại sản phẩm khách hỏi.
 2. Dùng fetch_url để lấy nội dung trang danh mục hoặc sản phẩm tương ứng.
 3. Dựa trên dữ liệu thực từ website để tư vấn chính xác về tên sản phẩm, giá, tính năng.
-4. Hướng dẫn khách đặt hàng và tư vấn trực tiếp qua ĐT/Zalo: 0909 167 046 nếu cần.
+4. Khi báo giá luôn nhắc: giá chưa có VAT hóa đơn và chưa có công lắp đặt.
+5. Hướng dẫn khách đặt hàng và tư vấn trực tiếp qua ĐT/Zalo: 0909 167 046 nếu cần.
 
 Nếu không biết câu trả lời, hãy nói thật và hướng khách liên hệ trực tiếp.`;
 
