@@ -62,11 +62,12 @@ export const toolDefinitions: Anthropic.Tool[] = [
   },
   {
     name: "fetch_url",
-    description: "Lấy nội dung văn bản hoặc JSON từ một URL.",
+    description: "Lấy nội dung từ một URL (trang web, JSON API). Tự động loại bỏ HTML và trả về văn bản sạch. Dùng để đọc thông tin sản phẩm, danh mục, giá cả từ website smarthomeq.tech hoặc bất kỳ URL nào.",
     input_schema: {
       type: "object" as const,
       properties: {
-        url: { type: "string" },
+        url: { type: "string", description: "URL đầy đủ cần lấy nội dung (ví dụ: https://smarthomeq.tech/danh-muc/cong-tac-thong-minh/)" },
+        max_length: { type: "number", description: "Số ký tự tối đa trả về (mặc định 8000)" },
       },
       required: ["url"],
     },
@@ -147,17 +148,48 @@ export async function executeTool(name: string, input: ToolInput): Promise<strin
     }
 
     case "fetch_url": {
-      const { url } = input as { url: string };
+      const { url, max_length = 8000 } = input as { url: string; max_length?: number };
       const resp = await fetch(url, {
-        headers: { "User-Agent": "workspace-mcp-server/1.0" },
-        signal: AbortSignal.timeout(10_000),
+        headers: {
+          "User-Agent": "Mozilla/5.0 (compatible; SmartHomeQ-Bot/1.0)",
+          "Accept": "text/html,application/json,text/plain,*/*",
+          "Accept-Language": "vi-VN,vi;q=0.9,en;q=0.8",
+        },
+        signal: AbortSignal.timeout(15_000),
       });
       if (!resp.ok) throw new Error(`HTTP ${resp.status} từ ${url}`);
       const ct = resp.headers.get("content-type") ?? "";
       let body: string;
-      if (ct.includes("application/json")) body = JSON.stringify(await resp.json(), null, 2);
-      else body = await resp.text();
-      return body.length > 6000 ? body.slice(0, 6000) + "\n...[cắt bớt]" : body;
+      if (ct.includes("application/json")) {
+        body = JSON.stringify(await resp.json(), null, 2);
+      } else {
+        const html = await resp.text();
+        // Strip scripts and styles
+        let clean = html
+          .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
+          .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+          .replace(/<noscript[^>]*>[\s\S]*?<\/noscript>/gi, "")
+          .replace(/<!--[\s\S]*?-->/g, "");
+        // Replace block elements with newlines
+        clean = clean
+          .replace(/<\/?(div|p|h[1-6]|li|tr|td|th|br|hr|section|article|header|footer|nav|main|aside)[^>]*>/gi, "\n")
+          .replace(/<[^>]+>/g, " ");
+        // Decode common HTML entities
+        clean = clean
+          .replace(/&nbsp;/g, " ")
+          .replace(/&amp;/g, "&")
+          .replace(/&lt;/g, "<")
+          .replace(/&gt;/g, ">")
+          .replace(/&quot;/g, '"')
+          .replace(/&#8363;/g, "₫")
+          .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
+          .replace(/&[a-z]+;/gi, " ");
+        // Collapse whitespace
+        clean = clean.replace(/\t/g, " ").replace(/ {2,}/g, " ").replace(/\n{3,}/g, "\n\n").trim();
+        body = clean;
+      }
+      const limited = body.length > max_length ? body.slice(0, max_length) + "\n...[cắt bớt]" : body;
+      return `Nội dung từ ${url}:\n\n${limited}`;
     }
 
     case "gdrive_list_files": {

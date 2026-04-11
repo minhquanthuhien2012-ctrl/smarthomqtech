@@ -75,13 +75,16 @@ export function ChatSidebar({ currentId, onSelect }: ChatSidebarProps) {
             </div>
           ) : (
             conversations?.map((conv) => (
-              <button
+              <div
                 key={conv.id}
+                role="button"
+                tabIndex={0}
                 onClick={() => {
                   onSelect(conv.id);
                   setIsMobileOpen(false);
                 }}
-                className={`w-full flex flex-col items-start gap-1 p-3 rounded-lg text-left transition-colors group ${
+                onKeyDown={(e) => { if (e.key === "Enter") { onSelect(conv.id); setIsMobileOpen(false); } }}
+                className={`w-full flex flex-col items-start gap-1 p-3 rounded-lg text-left transition-colors group cursor-pointer ${
                   currentId === conv.id
                     ? "bg-sidebar-accent text-sidebar-accent-foreground"
                     : "hover:bg-sidebar-accent/50 text-sidebar-foreground/80"
@@ -92,19 +95,18 @@ export function ChatSidebar({ currentId, onSelect }: ChatSidebarProps) {
                     <MessageSquare className="h-4 w-4 shrink-0" />
                     <span className="truncate">{conv.title}</span>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6 opacity-0 group-hover:opacity-100 shrink-0 hover:bg-destructive/10 hover:text-destructive transition-opacity"
+                  <button
+                    type="button"
+                    className="h-6 w-6 opacity-0 group-hover:opacity-100 shrink-0 rounded hover:bg-destructive/10 hover:text-destructive transition-opacity flex items-center justify-center"
                     onClick={(e) => handleDelete(e, conv.id)}
                   >
                     <Trash2 className="h-4 w-4" />
-                  </Button>
+                  </button>
                 </div>
                 <span className="text-xs text-sidebar-foreground/50 px-6">
                   {format(new Date(conv.createdAt), "dd/MM/yyyy HH:mm")}
                 </span>
-              </button>
+              </div>
             ))
           )}
         </div>
