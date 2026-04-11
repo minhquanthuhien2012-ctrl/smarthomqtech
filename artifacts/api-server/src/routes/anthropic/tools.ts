@@ -170,6 +170,21 @@ export async function executeTool(name: string, input: ToolInput): Promise<strin
           .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
           .replace(/<noscript[^>]*>[\s\S]*?<\/noscript>/gi, "")
           .replace(/<!--[\s\S]*?-->/g, "");
+        // Convert product images to markdown (capture src and alt)
+        clean = clean.replace(/<img[^>]+src=["']([^"']+)["'][^>]*alt=["']([^"']*)["'][^>]*\/?>/gi, (_, src, alt) => {
+          const fullSrc = src.startsWith("http") ? src : new URL(src, url).href;
+          return alt ? `\n![${alt}](${fullSrc})\n` : `\n![hình](${fullSrc})\n`;
+        });
+        clean = clean.replace(/<img[^>]+alt=["']([^"']*)["'][^>]+src=["']([^"']+)["'][^>]*\/?>/gi, (_, alt, src) => {
+          const fullSrc = src.startsWith("http") ? src : new URL(src, url).href;
+          return alt ? `\n![${alt}](${fullSrc})\n` : `\n![hình](${fullSrc})\n`;
+        });
+        // Convert anchor links to markdown links
+        clean = clean.replace(/<a[^>]+href=["']([^"'#][^"']*)["'][^>]*>([\s\S]*?)<\/a>/gi, (_, href, text) => {
+          const fullHref = href.startsWith("http") ? href : new URL(href, url).href;
+          const linkText = text.replace(/<[^>]+>/g, "").trim();
+          return linkText ? `[${linkText}](${fullHref})` : fullHref;
+        });
         // Replace block elements with newlines
         clean = clean
           .replace(/<\/?(div|p|h[1-6]|li|tr|td|th|br|hr|section|article|header|footer|nav|main|aside)[^>]*>/gi, "\n")
