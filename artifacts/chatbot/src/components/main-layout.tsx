@@ -163,8 +163,8 @@ export function MainLayout({ children, title, noPadding }: MainLayoutProps) {
           </div>
         </main>
 
-        {/* Extra bottom spacing for mobile tab bar */}
-        {!noPadding && <div className="h-16 md:hidden shrink-0" />}
+        {/* Extra bottom spacing for mobile tab bar — always in DOM, toggled via CSS */}
+        <div className={`shrink-0 md:hidden ${noPadding ? "h-0" : "h-16"}`} />
       </div>
 
       {/* Mobile bottom tab bar */}

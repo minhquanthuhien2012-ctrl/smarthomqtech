@@ -31,15 +31,6 @@ export function AgentPopup() {
     scrollRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, activeTools]);
 
-  // Lock body scroll when open on mobile
-  useEffect(() => {
-    if (open && window.innerWidth < 768) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "";
-    }
-    return () => { document.body.style.overflow = ""; };
-  }, [open]);
 
   const sendMessage = async (content: string) => {
     setLoading(true);
