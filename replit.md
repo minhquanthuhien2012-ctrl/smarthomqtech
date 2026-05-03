@@ -1,64 +1,89 @@
-# Workspace
+# SmartHomeQ MCP Chatbot
 
-## Overview
+## Tổng quan
 
-pnpm workspace monorepo using TypeScript. Each package manages its own dependencies.
+Hệ thống chatbot AI cho cửa hàng nhà thông minh **SmartHomeQ** (smarthomeq.tech).  
+Bao gồm: API server, web chatbot + admin dashboard, tích hợp Zalo OA, Xiaozhi WebSocket.
 
 ## Stack
 
-- **Monorepo tool**: pnpm workspaces
-- **Node.js version**: 24
-- **Package manager**: pnpm
-- **TypeScript version**: 5.9
-- **API framework**: Express 5
-- **Database**: PostgreSQL + Drizzle ORM
-- **Validation**: Zod (`zod/v4`), `drizzle-zod`
-- **API codegen**: Orval (from OpenAPI spec)
-- **Build**: esbuild (CJS bundle)
-- **MCP Server**: @modelcontextprotocol/sdk (stdio transport)
+- **Monorepo**: pnpm workspaces
+- **Node.js**: 24 / TypeScript 5.9
+- **API**: Express 5 + Drizzle ORM + PostgreSQL
+- **Frontend**: React + Vite + Tailwind + shadcn/ui + Wouter
+- **AI**: Anthropic Claude Sonnet (via Replit AI Integration)
+- **Validation**: Zod (`zod/v4` trong libs, `zod` trong api-server routes)
+- **Build**: esbuild
+
+## Artifacts
+
+| Artifact | URL | Mô tả |
+|---|---|---|
+| `api-server` | `/api/*` | Express API + Anthropic SSE streaming |
+| `chatbot` | `/` | React web app — Chat + Admin dashboard |
+
+## URLs quan trọng
+
+- **Chat**: `/`
+- **Admin Dashboard**: `/admin`
+- **Chatbots**: `/admin/chatbots`
+- **Tools**: `/admin/tools`
+- **Skills**: `/admin/skills`
+- **Kết nối**: `/admin/connections`
+- **Zalo Webhook**: `/api/webhooks/zalo` (POST)
+- **Health**: `/api/healthz`
+
+## Database Tables
+
+- `conversations` — hội thoại chatbot
+- `messages` — tin nhắn trong hội thoại
+- `chatbots` — quản lý các chatbot
+- `tools` — quản lý tools (builtin + custom)
+- `skills` — automation skills
+- `connections` — kết nối Zalo/Messenger/Xiaozhi/WebSocket
+
+## Tính năng
+
+### Chatbot AI
+- Claude Sonnet với system prompt tư vấn SmartHomeQ
+- SSE streaming real-time
+- Tool use: `fetch_url`, `calculator`, `get_current_time`, `gdrive_*`
+- Luôn kèm link + hình ảnh sản phẩm khi tư vấn
+- Popup chatbot góc phải màn hình (hiển thị trên mọi trang)
+
+### Admin Dashboard
+- **Dashboard**: tổng quan stats hệ thống
+- **Chatbots**: CRUD chatbot, chọn model, system prompt, tools/skills
+- **Tools**: CRUD tools (builtin + custom), JSON schema editor, JS implementation
+- **Skills**: automation theo trigger → actions (fetch_url, send_message, call_api...)
+- **Kết nối**: Zalo OA, Xiaozhi WebSocket, Messenger, Webhook tùy chỉnh
+
+### Kết nối nền tảng
+- **Zalo OA**: token `4544700640850963554:KcaE...`, secret `TGo-n7-mcmjl629xav`
+  - Webhook URL: `/api/webhooks/zalo`
+  - Nhận tin nhắn → AI trả lời tự động
+- **Xiaozhi**: WebSocket `wss://api.xiaozhi.me/mcp/?token=...`
+
+## Secrets
+
+- `GOOGLE_SERVICE_ACCOUNT_JSON` — Google Service Account cho Drive tools
+- `SESSION_SECRET` — session secret
+- Anthropic: `AI_INTEGRATIONS_ANTHROPIC_BASE_URL`, `AI_INTEGRATIONS_ANTHROPIC_API_KEY` (auto Replit)
 
 ## Key Commands
 
-- `pnpm run typecheck` — full typecheck across all packages
-- `pnpm run build` — typecheck + build all packages
-- `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from OpenAPI spec
-- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- `pnpm --filter @workspace/api-server run dev` — run API server locally
-- `pnpm --filter @workspace/mcp-server run build` — build MCP server
-- `pnpm --filter @workspace/mcp-server run dev` — run MCP server in watch mode (stdio)
-
-## MCP Server
-
-Located at `artifacts/mcp-server/`. Implements the Model Context Protocol over stdio.
-
-**Built-in tools:**
-- `calculator` — phép tính cơ bản (cộng, trừ, nhân, chia, lũy thừa, căn)
-- `get_current_time` — thời gian hiện tại theo múi giờ
-- `echo` — lặp lại & biến đổi chuỗi
-- `fetch_url` — lấy nội dung từ URL
-- `gdrive_list_files` — liệt kê file trong Google Drive
-- `gdrive_read_file` — đọc nội dung file Google Docs/Sheets/Slides/text
-- `gdrive_search` — tìm kiếm file theo tên hoặc nội dung
-
-**Secrets cần thiết:**
-- `GOOGLE_SERVICE_ACCOUNT_JSON` — JSON key của Google Service Account (đã cấu hình)
-  - Service Account phải được chia sẻ quyền đọc trên file/folder Drive muốn truy cập
-  - Cần bật Google Drive API, Google Docs API, Google Sheets API trong Google Cloud Console
-
-**Built-in resources:**
-- `mcp://workspace/server-info` — thông tin server
-- `mcp://workspace/help` — hướng dẫn sử dụng
-
-**Claude Desktop config:**
-```json
-{
-  "mcpServers": {
-    "workspace": {
-      "command": "node",
-      "args": ["/path/to/artifacts/mcp-server/dist/index.mjs"]
-    }
-  }
-}
+```bash
+pnpm run typecheck              # full typecheck
+pnpm --filter @workspace/db run push          # push DB schema
+pnpm --filter @workspace/api-server run build # build api-server
+pnpm --filter @workspace/api-spec run codegen # regenerate API hooks
 ```
 
-See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details.
+## Lưu ý kỹ thuật
+
+- `zod/v4` dùng trong `lib/db/src/schema/*` (drizzle-zod yêu cầu)
+- `zod` (v3) dùng trong `artifacts/api-server/src/routes/admin/*`
+- Button lồng nhau: dùng `<span role="button">` thay `<button>` bên trong div clickable
+- SSE streaming: `text/event-stream` với `data: {json}\n\n` format
+- Webhook Zalo: xác thực HMAC-SHA256 với secret token
+- DB migration: `pnpm --filter @workspace/db run push`

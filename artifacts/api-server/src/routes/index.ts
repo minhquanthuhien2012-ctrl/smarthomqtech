@@ -1,10 +1,14 @@
 import { Router, type IRouter } from "express";
 import healthRouter from "./health";
 import anthropicRouter from "./anthropic/index.js";
+import adminRouter from "./admin/index.js";
+import webhooksRouter from "./webhooks/zalo.js";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
 router.use("/anthropic", anthropicRouter);
+router.use("/admin", adminRouter);
+router.use("/webhooks", webhooksRouter);
 
 export default router;

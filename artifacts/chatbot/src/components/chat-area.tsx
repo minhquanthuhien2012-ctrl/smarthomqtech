@@ -217,8 +217,8 @@ export function ChatArea({ conversationId, onConversationCreated }: ChatAreaProp
 
   return (
     <div className="flex flex-col flex-1 h-screen overflow-hidden">
-      <div className="px-6 py-4 border-b border-border shrink-0">
-        <h1 className="text-sm font-medium text-muted-foreground tracking-wide">Trợ lý AI</h1>
+      <div className="px-6 py-4 border-b border-border shrink-0 flex items-center justify-between">
+        <h1 className="text-sm font-medium text-muted-foreground tracking-wide">Trợ lý AI SmartHomeQ</h1>
       </div>
 
       <ScrollArea className="flex-1">
@@ -231,7 +231,7 @@ export function ChatArea({ conversationId, onConversationCreated }: ChatAreaProp
               <div className="space-y-1">
                 <p className="font-medium text-foreground">Bắt đầu trò chuyện</p>
                 <p className="text-muted-foreground text-sm max-w-xs">
-                  Hỏi về tài liệu Google Drive, tính toán, lấy nội dung web, hoặc bất cứ điều gì.
+                  Hỏi về sản phẩm nhà thông minh, tư vấn Zigbee / WiFi, giá cả, hoặc bất cứ điều gì.
                 </p>
               </div>
             </div>

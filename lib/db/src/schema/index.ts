@@ -19,3 +19,7 @@
 
 export * from "./conversations";
 export * from "./messages";
+export * from "./chatbots";
+export * from "./tools";
+export * from "./connections";
+export * from "./skills";
