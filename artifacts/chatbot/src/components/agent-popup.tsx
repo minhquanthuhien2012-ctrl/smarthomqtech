@@ -15,12 +15,7 @@ interface ToolCall {
   status: "starting" | "running" | "done" | "error";
 }
 
-const SYSTEM_NOTE = `Bạn là AI Agent developer của MCP Server SmartHomeQ. Bạn có thể:
-- Đọc/sửa file code trong hệ thống
-- Tạo chatbot, tool, skill mới
-- Debug lỗi
-- Hướng dẫn cấu hình
-Trả lời ngắn gọn, chính xác bằng tiếng Việt.`;
+const QUICK_PROMPTS = ["Tạo tool mới", "Sửa system prompt", "Thêm chatbot", "Xem lỗi server"];
 
 export function AgentPopup() {
   const [open, setOpen] = useState(false);
@@ -35,6 +30,16 @@ export function AgentPopup() {
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, activeTools]);
+
+  // Lock body scroll when open on mobile
+  useEffect(() => {
+    if (open && window.innerWidth < 768) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => { document.body.style.overflow = ""; };
+  }, [open]);
 
   const sendMessage = async (content: string) => {
     setLoading(true);
@@ -104,7 +109,7 @@ export function AgentPopup() {
                 return [...prev, { name, status: status as ToolCall["status"] }];
               });
               if (status === "done" || status === "error") {
-                setTimeout(() => { setActiveTools(p => p.filter(t => !(t.name === name && (t.status === "done" || t.status === "error")))); }, 1000);
+                setTimeout(() => { setActiveTools(p => p.filter(t => !(t.name === name))); }, 1000);
               }
             }
 
@@ -152,113 +157,134 @@ export function AgentPopup() {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void handleSend(); }
   };
 
-  const popupClass = maximized
-    ? "fixed inset-4 z-50"
-    : "fixed top-16 right-5 z-50 w-[380px] max-w-[calc(100vw-2rem)] h-[500px]";
+  // On mobile: full screen overlay. On desktop: corner popup or maximized
+  const isMobileFullscreen = open; // will be shown full screen on mobile via CSS
 
   return (
     <>
+      {/* Trigger button — always visible */}
       <button
         onClick={() => setOpen(o => !o)}
         title="AI Agent Developer"
-        className="fixed top-3 right-4 z-50 flex items-center gap-2 px-3 py-1.5 rounded-full bg-violet-600 text-white text-xs font-semibold shadow-lg hover:bg-violet-700 active:scale-95 transition-all"
+        className="fixed top-2 right-3 z-50 flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-violet-600 text-white text-xs font-semibold shadow-lg hover:bg-violet-700 active:scale-95 transition-all"
       >
         <Code2 className="h-3.5 w-3.5" />
-        <span>AI Agent</span>
+        <span className="hidden sm:inline">AI Agent</span>
         <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
       </button>
 
       {open && (
-        <div className={`${popupClass} flex flex-col bg-background border border-border rounded-2xl shadow-2xl overflow-hidden`}>
-          <div className="flex items-center gap-2 px-4 py-2.5 border-b bg-violet-600/10 shrink-0">
-            <Code2 className="h-4 w-4 text-violet-400 shrink-0" />
-            <span className="font-semibold text-sm text-violet-300 flex-1">AI Agent Developer</span>
-            <span className="text-xs text-muted-foreground">MCP Server</span>
-            <button onClick={() => setMaximized(m => !m)} className="text-muted-foreground hover:text-foreground ml-1">
-              {maximized ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
-            </button>
-            <button onClick={() => setOpen(false)} className="text-muted-foreground hover:text-foreground">
-              <X className="h-3.5 w-3.5" />
-            </button>
-          </div>
+        <>
+          {/* Mobile backdrop */}
+          <div className="md:hidden fixed inset-0 z-40 bg-black/50" onClick={() => setOpen(false)} />
 
-          <div className="flex-1 overflow-y-auto px-3 py-3 space-y-3">
-            {messages.length === 0 && (
-              <div className="text-center space-y-3 py-6">
-                <div className="w-10 h-10 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center mx-auto">
-                  <Bot className="h-5 w-5 text-violet-400" />
-                </div>
-                <p className="text-sm text-muted-foreground">AI Agent sẵn sàng hỗ trợ</p>
-                <div className="flex flex-wrap gap-1.5 justify-center px-2">
-                  {["Tạo tool mới", "Sửa system prompt", "Xem file index.ts", "Thêm chatbot"].map(q => (
-                    <button key={q} onClick={() => setInput(q)}
-                      className="text-xs bg-violet-500/10 hover:bg-violet-500/20 text-violet-300 rounded-full px-2.5 py-1 transition-colors border border-violet-500/20">
-                      {q}
-                    </button>
-                  ))}
-                </div>
-                <p className="text-xs text-muted-foreground/50 px-4">{SYSTEM_NOTE.split("\n")[0]}</p>
-              </div>
-            )}
+          <div className={[
+            "fixed z-50 flex flex-col bg-background border border-border shadow-2xl overflow-hidden",
+            // Mobile: full screen minus top header
+            "inset-x-0 bottom-0 top-12 rounded-t-2xl",
+            // Desktop: corner popup or maximized
+            maximized
+              ? "md:inset-4 md:rounded-2xl"
+              : "md:top-14 md:right-4 md:bottom-auto md:left-auto md:w-[420px] md:h-[520px] md:rounded-2xl md:inset-x-auto",
+          ].join(" ")}>
+            {/* Header */}
+            <div className="flex items-center gap-2 px-4 py-3 border-b bg-violet-600/10 shrink-0">
+              <Code2 className="h-4 w-4 text-violet-400 shrink-0" />
+              <span className="font-semibold text-sm text-violet-300 flex-1">AI Agent Developer</span>
+              <span className="text-xs text-muted-foreground hidden sm:block">MCP Server</span>
+              <button onClick={() => setMaximized(m => !m)} className="hidden md:block text-muted-foreground hover:text-foreground p-1">
+                {maximized ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+              </button>
+              <button onClick={() => setOpen(false)} className="text-muted-foreground hover:text-foreground p-1">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
 
-            {messages.map((msg, idx) => (
-              <div key={idx} className={`flex gap-2 ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-                {msg.role === "assistant" && (
-                  <div className="w-6 h-6 rounded-lg bg-violet-500/10 border border-violet-500/20 flex items-center justify-center shrink-0 mt-0.5">
-                    <Bot className="h-3 w-3 text-violet-400" />
+            {/* Messages */}
+            <div className="flex-1 overflow-y-auto px-3 py-3 space-y-3">
+              {messages.length === 0 && (
+                <div className="text-center space-y-4 py-8 px-2">
+                  <div className="w-12 h-12 rounded-2xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center mx-auto">
+                    <Bot className="h-6 w-6 text-violet-400" />
                   </div>
-                )}
-                <div className={`max-w-[85%] rounded-xl px-3 py-2 text-sm ${
-                  msg.role === "user"
-                    ? "bg-violet-600 text-white rounded-br-sm"
-                    : "bg-secondary text-foreground rounded-bl-sm"
-                }`}>
-                  {msg.role === "user" ? (
-                    <p className="whitespace-pre-wrap leading-relaxed">{msg.content}</p>
-                  ) : (
-                    <div className="min-h-[1em]">
-                      {msg.content ? <MarkdownRenderer content={msg.content} /> : <span className="inline-block w-1.5 h-3.5 bg-violet-400 animate-pulse rounded-sm" />}
+                  <div>
+                    <p className="text-sm font-medium">AI Agent sẵn sàng hỗ trợ</p>
+                    <p className="text-xs text-muted-foreground mt-1">Tạo tool, sửa code, thêm chatbot...</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2 justify-center">
+                    {QUICK_PROMPTS.map(q => (
+                      <button key={q} onClick={() => setInput(q)}
+                        className="text-xs bg-violet-500/10 hover:bg-violet-500/20 text-violet-300 rounded-full px-3 py-1.5 transition-colors border border-violet-500/20 active:scale-95">
+                        {q}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {messages.map((msg, idx) => (
+                <div key={idx} className={`flex gap-2 ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                  {msg.role === "assistant" && (
+                    <div className="w-7 h-7 rounded-lg bg-violet-500/10 border border-violet-500/20 flex items-center justify-center shrink-0 mt-0.5">
+                      <Bot className="h-3.5 w-3.5 text-violet-400" />
+                    </div>
+                  )}
+                  <div className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm ${
+                    msg.role === "user"
+                      ? "bg-violet-600 text-white rounded-br-sm"
+                      : "bg-secondary text-foreground rounded-bl-sm"
+                  }`}>
+                    {msg.role === "user" ? (
+                      <p className="whitespace-pre-wrap leading-relaxed">{msg.content}</p>
+                    ) : (
+                      <div className="min-h-[1em]">
+                        {msg.content
+                          ? <MarkdownRenderer content={msg.content} />
+                          : <span className="inline-block w-1.5 h-3.5 bg-violet-400 animate-pulse rounded-sm" />}
+                      </div>
+                    )}
+                  </div>
+                  {msg.role === "user" && (
+                    <div className="w-7 h-7 rounded-lg bg-violet-500/20 flex items-center justify-center shrink-0 mt-0.5">
+                      <User className="h-3.5 w-3.5 text-violet-400" />
                     </div>
                   )}
                 </div>
-                {msg.role === "user" && (
-                  <div className="w-6 h-6 rounded-lg bg-violet-500/20 flex items-center justify-center shrink-0 mt-0.5">
-                    <User className="h-3 w-3 text-violet-400" />
-                  </div>
-                )}
-              </div>
-            ))}
+              ))}
 
-            {activeTools.filter(t => t.status !== "done" && t.status !== "error").map((tool, i) => (
-              <div key={i} className="flex items-center gap-2 text-xs text-violet-400 pl-8">
-                <Loader2 className="h-3 w-3 animate-spin" />
-                <span>{tool.name}...</span>
-              </div>
-            ))}
-            <div ref={scrollRef} />
-          </div>
+              {activeTools.filter(t => t.status !== "done" && t.status !== "error").map((tool, i) => (
+                <div key={i} className="flex items-center gap-2 text-xs text-violet-400 pl-9">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  <span>{tool.name}...</span>
+                </div>
+              ))}
+              <div ref={scrollRef} />
+            </div>
 
-          <div className="px-3 py-2.5 border-t shrink-0">
-            <div className="flex gap-2 items-end bg-secondary/40 border border-violet-500/20 rounded-xl px-3 py-1.5 focus-within:border-violet-500/40 transition-colors">
-              <Textarea
-                value={input}
-                onChange={e => setInput(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="Hỏi về code, tạo tool, sửa chatbot..."
-                className="flex-1 resize-none border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 text-sm min-h-[36px] max-h-[100px] placeholder:text-muted-foreground/40 p-0 pt-0.5"
-                rows={1}
-              />
-              <Button
-                onClick={() => void handleSend()}
-                disabled={loading || !input.trim()}
-                size="icon"
-                className="shrink-0 h-7 w-7 rounded-lg mb-0.5 bg-violet-600 hover:bg-violet-700"
-              >
-                {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
-              </Button>
+            {/* Input */}
+            <div className="px-3 py-3 border-t shrink-0">
+              <div className="flex gap-2 items-end bg-secondary/40 border border-violet-500/20 rounded-xl px-3 py-2 focus-within:border-violet-500/50 transition-colors">
+                <Textarea
+                  value={input}
+                  onChange={e => setInput(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="Hỏi về code, tạo tool, sửa chatbot..."
+                  className="flex-1 resize-none border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 text-sm min-h-[36px] max-h-[120px] placeholder:text-muted-foreground/40 p-0"
+                  rows={1}
+                />
+                <Button
+                  onClick={() => void handleSend()}
+                  disabled={loading || !input.trim()}
+                  size="icon"
+                  className="shrink-0 h-8 w-8 rounded-lg bg-violet-600 hover:bg-violet-700"
+                >
+                  {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+                </Button>
+              </div>
+              <p className="text-[10px] text-muted-foreground/40 text-center mt-1.5 hidden sm:block">Enter gửi — Shift+Enter xuống dòng</p>
             </div>
           </div>
-        </div>
+        </>
       )}
     </>
   );
