@@ -193,17 +193,12 @@ export default function ConnectionsPage() {
                 <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3 space-y-2.5">
                   <p className="text-xs font-semibold text-blue-400">Webhook URL — dán vào Zalo Bot dashboard:</p>
                   <div className="flex items-start gap-2">
-                    <code className="text-xs text-blue-300 flex-1 break-all leading-relaxed">{webhookBase}/api/webhooks/zalo</code>
-                    <Button size="sm" variant="ghost" className="h-6 w-6 p-0 shrink-0" onClick={() => copy(`${webhookBase}/api/webhooks/zalo`)}>
-                      <Copy className="h-3 w-3" />
+                    <code className="text-xs text-blue-300 flex-1 break-all leading-relaxed font-mono">{webhookBase}/api/webhooks/zalo</code>
+                    <Button size="sm" variant="ghost" className="h-7 w-7 p-0 shrink-0" onClick={() => copy(`${webhookBase}/api/webhooks/zalo`)}>
+                      <Copy className="h-3.5 w-3.5" />
                     </Button>
                   </div>
-                  {webhookBase.includes("spock.replit.dev") && (
-                    <p className="text-[11px] text-yellow-400 bg-yellow-500/10 rounded px-2 py-1.5">
-                      Đây là URL dev. Sau khi publish, mở app production để lấy URL thật để dán vào Zalo Bot.
-                    </p>
-                  )}
-                  <div className="flex gap-3">
+                  <div className="flex gap-3 pt-0.5">
                     <a href="https://chatbot.zalo.me" target="_blank" rel="noreferrer" className="text-xs text-blue-400 flex items-center gap-1 hover:underline">
                       <ExternalLink className="h-3 w-3" /> Zalo Bot Dashboard
                     </a>
