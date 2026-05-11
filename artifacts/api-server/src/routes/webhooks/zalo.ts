@@ -16,7 +16,7 @@ Nhiệm vụ của bạn:
 - Tư vấn khách hàng về sản phẩm nhà thông minh: công tắc, cảm biến, camera, khóa cửa, rèm tự động, đèn thông minh, hub, aptomat, motor cửa cổng, loa thông minh, v.v.
 - Luôn dùng công cụ fetch_url để lấy thông tin thực tế từ website trước khi trả lời.
 - Khi báo giá luôn nhắc: giá chưa có VAT hóa đơn và chưa có công lắp đặt.
-- Trả lời ngắn gọn phù hợp Zalo (không dùng markdown phức tạp, không hiển thị hình ảnh).
+- Trả lời ngắn gọn phù hợp Zalo (không dùng markdown, không dùng **, không dùng #, viết thường).
 - Luôn ưu tiên tư vấn Zigbee hơn WiFi.`;
 
 async function getZaloConfig(): Promise<{ accessToken: string; secretToken: string } | null> {
@@ -29,65 +29,38 @@ async function getZaloConfig(): Promise<{ accessToken: string; secretToken: stri
   };
 }
 
-function verifyZaloSignature(rawBody: Buffer, signature: string, secret: string): boolean {
-  const hash = crypto
-    .createHmac("sha256", secret)
-    .update(rawBody)
-    .digest("hex");
-  return hash === signature;
+function verifyMac(rawBody: Buffer, mac: string, secret: string): boolean {
+  const hash = crypto.createHmac("sha256", secret).update(rawBody).digest("hex");
+  return hash === mac;
 }
 
-async function sendZaloMessage(accessToken: string, userId: string, text: string) {
-  const payload = JSON.stringify({
+// Zalo Bot API — dùng cho bot.zalo.me (khác OA)
+async function sendZaloBotMessage(botToken: string, userId: string, text: string) {
+  const url = "https://bot.zalo.me/api/message";
+  const body = JSON.stringify({
     recipient: { user_id: userId },
     message: { text: text.slice(0, 2000) },
   });
 
-  // Thử v3.0 trước
-  const res3 = await fetch("https://openapi.zalo.me/v3.0/oa/message/cs", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "access_token": accessToken },
-    body: payload,
-  });
-  const data3 = await res3.json() as { error: number; message?: string };
-  console.log("[Zalo] v3.0 response:", JSON.stringify(data3));
+  console.log("[Zalo Bot] Sending to userId:", userId, "| text length:", text.length);
 
-  if (data3.error === 0) {
-    console.log("[Zalo] v3.0 sendMessage OK to", userId);
-    return data3;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "access_token": botToken,
+    },
+    body,
+  });
+
+  const raw = await res.text();
+  console.log("[Zalo Bot] API response (", res.status, "):", raw);
+
+  try {
+    return JSON.parse(raw) as { error: number; message?: string };
+  } catch {
+    return { error: -1, message: raw };
   }
-
-  // Fallback v2.0 (HTTP API token dạng OA_ID:secret dùng được với v2.0)
-  const res2 = await fetch("https://openapi.zalo.me/v2.0/oa/message", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "access_token": accessToken },
-    body: JSON.stringify({
-      recipient: { user_id: userId },
-      message: { attachment: { type: "template", payload: { template_type: "media", elements: [{ media_type: "text", url: "" }] } } },
-    }),
-  });
-  const data2raw = await res2.text();
-  console.log("[Zalo] v2.0 raw response:", data2raw);
-
-  // v2.0 text message (simpler format)
-  const res2txt = await fetch("https://openapi.zalo.me/v2.0/oa/message", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "access_token": accessToken },
-    body: JSON.stringify({
-      recipient: { user_id: userId },
-      message: { text: text.slice(0, 2000) },
-    }),
-  });
-  const data2 = await res2txt.json() as { error: number; message?: string };
-  console.log("[Zalo] v2.0 text response:", JSON.stringify(data2));
-
-  if (data2.error === 0) {
-    console.log("[Zalo] v2.0 sendMessage OK to", userId);
-  } else {
-    console.error("[Zalo] Both v3 and v2 failed. Check token validity and OA permissions.");
-    console.error("[Zalo] Token used (first 40 chars):", accessToken.slice(0, 40) + "...");
-  }
-  return data2;
 }
 
 async function getAiReply(userMessage: string): Promise<string> {
@@ -110,8 +83,7 @@ async function getAiReply(userMessage: string): Promise<string> {
 
     if (response.stop_reason === "tool_use") {
       const toolUseBlocks = response.content.filter(b => b.type === "tool_use");
-      const assistantContent: Anthropic.MessageParam["content"] = response.content;
-      currentMessages.push({ role: "assistant", content: assistantContent });
+      currentMessages.push({ role: "assistant", content: response.content });
 
       const toolResults: Array<{ type: "tool_result"; tool_use_id: string; content: string; is_error?: boolean }> = [];
       for (const tool of toolUseBlocks) {
@@ -134,63 +106,74 @@ async function getAiReply(userMessage: string): Promise<string> {
   return fullResponse || "Xin lỗi, tôi không thể trả lời lúc này. Vui lòng liên hệ 0909 167 046.";
 }
 
-router.get("/zalo", (req, res) => {
-  res.json({ status: "ok", message: "Zalo webhook endpoint active" });
+router.get("/zalo", (_req, res) => {
+  res.json({ status: "ok", message: "Zalo Bot webhook active" });
 });
 
 router.post("/zalo", async (req, res) => {
-  // Log toàn bộ request để debug
-  console.log("[Zalo] incoming headers:", JSON.stringify(req.headers));
-  console.log("[Zalo] incoming body:", JSON.stringify(req.body));
+  // Log đầy đủ để debug
+  console.log("[Zalo Bot] Headers:", JSON.stringify({
+    mac: req.headers["mac"],
+    "x-zevent-signature": req.headers["x-zevent-signature"],
+    "content-type": req.headers["content-type"],
+  }));
+  console.log("[Zalo Bot] Body:", JSON.stringify(req.body));
 
   const config = await getZaloConfig();
-  if (!config || !config.accessToken) {
-    console.error("[Zalo] No Zalo connection configured in DB");
+  if (!config?.accessToken) {
+    console.error("[Zalo Bot] No config in DB");
     res.status(200).json({ error: 0 });
     return;
   }
 
-  // Xác thực chữ ký (dùng raw body)
-  const signature = (req.headers["x-zevent-signature"] as string ?? "").replace("sha256=", "");
-  if (signature && req.rawBody) {
-    if (!verifyZaloSignature(req.rawBody, signature, config.secretToken)) {
-      console.error("[Zalo] Signature mismatch! Expected secret:", config.secretToken);
-      res.status(403).json({ error: "Invalid signature" });
+  // Zalo Bot dùng header "mac" để xác thực (khác OA dùng x-zevent-signature)
+  const mac = (req.headers["mac"] as string) ?? (req.headers["x-zevent-signature"] as string ?? "").replace("sha256=", "");
+  if (mac && req.rawBody && config.secretToken) {
+    if (!verifyMac(req.rawBody, mac, config.secretToken)) {
+      console.error("[Zalo Bot] MAC mismatch");
+      res.status(403).json({ error: "Invalid mac" });
       return;
     }
-    console.log("[Zalo] Signature OK");
+    console.log("[Zalo Bot] MAC OK");
   } else {
-    console.log("[Zalo] No signature header — skipping verification");
+    console.log("[Zalo Bot] No mac header — skipping verification");
   }
 
+  // Zalo Bot payload có thể có nhiều dạng khác nhau
   const body = req.body as {
     event_name?: string;
     message?: { text?: string; msg_id?: string };
     sender?: { id?: string };
+    user_id_by_app?: string;
     follower?: { id?: string };
+    from?: { id?: string };
     app_id?: string | number;
   };
 
-  // Xử lý nhiều dạng event Zalo OA
   const eventName = body.event_name ?? "";
-  const userId = body.sender?.id ?? body.follower?.id ?? "";
+  // Thử lấy userId từ nhiều field khác nhau (Bot vs OA có cấu trúc khác)
+  const userId = body.sender?.id ?? body.user_id_by_app ?? body.follower?.id ?? body.from?.id ?? "";
   const userText = body.message?.text ?? "";
 
-  console.log("[Zalo] event_name:", eventName, "| userId:", userId, "| text:", userText);
+  console.log("[Zalo Bot] event:", eventName, "| userId:", userId, "| text:", userText);
 
-  if (!["user_send_text", "user_send_image", "user_send_sticker"].includes(eventName) || !userText || !userId) {
-    console.log("[Zalo] Not a text message — skipping AI reply");
+  const textEvents = ["user_send_text", "user_send_image", "user_send_sticker", "follow"];
+  if (!textEvents.includes(eventName) || !userText || !userId) {
+    console.log("[Zalo Bot] Skipped — not a text message or missing fields");
     res.status(200).json({ error: 0 });
     return;
   }
 
-  // Trả về 200 ngay để Zalo không retry
+  // Trả 200 ngay để Zalo không retry
   res.status(200).json({ error: 0 });
 
-  // Gọi AI và gửi trả lời async
+  // Gọi AI async và gửi trả lời
   getAiReply(userText)
-    .then(reply => sendZaloMessage(config.accessToken, userId, reply))
-    .catch(err => console.error("[Zalo] AI/send error:", err));
+    .then(reply => {
+      console.log("[Zalo Bot] AI replied:", reply.slice(0, 100) + "...");
+      return sendZaloBotMessage(config.accessToken, userId, reply);
+    })
+    .catch(err => console.error("[Zalo Bot] Error:", err));
 });
 
 export default router;
