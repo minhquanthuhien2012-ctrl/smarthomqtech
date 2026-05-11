@@ -42,7 +42,11 @@ export default function ConnectionsPage() {
     setLoading(true);
     try {
       const r = await fetch(`${apiBase()}/admin/connections`);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
       setItems(await r.json() as Connection[]);
+    } catch (err) {
+      console.error("[connections] load failed:", err);
+      toast({ title: "Không thể tải kết nối — kiểm tra server", variant: "destructive" });
     } finally { setLoading(false); }
   };
   useEffect(() => { void load(); }, []);

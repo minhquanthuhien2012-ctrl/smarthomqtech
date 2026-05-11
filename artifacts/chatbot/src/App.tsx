@@ -2,6 +2,7 @@ import { Switch, Route, Router as WouterRouter } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { ErrorBoundary } from "@/components/error-boundary";
 import NotFound from "@/pages/not-found";
 import { MainLayout } from "@/components/main-layout";
 import { AgentPopup } from "@/components/agent-popup";
@@ -11,8 +12,22 @@ import ChatbotsPage from "@/pages/admin/chatbots";
 import ToolsPage from "@/pages/admin/tools";
 import SkillsPage from "@/pages/admin/skills";
 import ConnectionsPage from "@/pages/admin/connections";
+import { useEffect } from "react";
+import { apiBase } from "@/lib/api";
 
 const queryClient = new QueryClient();
+
+function KeepAlive() {
+  useEffect(() => {
+    const ping = () => {
+      fetch(`${apiBase()}/healthz`).catch(() => {});
+    };
+    ping();
+    const id = setInterval(ping, 4 * 60 * 1000);
+    return () => clearInterval(id);
+  }, []);
+  return null;
+}
 
 function Router() {
   return (
@@ -54,15 +69,18 @@ function Router() {
 
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-          <Router />
-          <AgentPopup />
-        </WouterRouter>
-        <Toaster />
-      </TooltipProvider>
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+            <KeepAlive />
+            <Router />
+            <AgentPopup />
+          </WouterRouter>
+          <Toaster />
+        </TooltipProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 }
 

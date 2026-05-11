@@ -37,8 +37,14 @@ export default function SkillsPage() {
 
   const load = async () => {
     setLoading(true);
-    try { setItems(await fetch(`${apiBase()}/admin/skills`).then(r => r.json()) as Skill[]); }
-    finally { setLoading(false); }
+    try {
+      const r = await fetch(`${apiBase()}/admin/skills`);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      setItems(await r.json() as Skill[]);
+    } catch (err) {
+      console.error("[skills] load failed:", err);
+      toast({ title: "Không thể tải skills — kiểm tra server", variant: "destructive" });
+    } finally { setLoading(false); }
   };
   useEffect(() => { void load(); }, []);
 

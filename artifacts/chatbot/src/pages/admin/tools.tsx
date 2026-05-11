@@ -30,8 +30,14 @@ export default function ToolsPage() {
 
   const load = async () => {
     setLoading(true);
-    try { setItems(await fetch(`${apiBase()}/admin/tools`).then(r => r.json()) as Tool[]); }
-    finally { setLoading(false); }
+    try {
+      const r = await fetch(`${apiBase()}/admin/tools`);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      setItems(await r.json() as Tool[]);
+    } catch (err) {
+      console.error("[tools] load failed:", err);
+      toast({ title: "Không thể tải tools — kiểm tra server", variant: "destructive" });
+    } finally { setLoading(false); }
   };
   useEffect(() => { void load(); }, []);
 

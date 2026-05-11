@@ -37,11 +37,14 @@ export default function ChatbotsPage() {
     setLoading(true);
     try {
       const [bots, tools, skills] = await Promise.all([
-        fetch(`${apiBase()}/admin/chatbots`).then(r => r.json()) as Promise<Chatbot[]>,
-        fetch(`${apiBase()}/admin/tools`).then(r => r.json()) as Promise<Tool[]>,
-        fetch(`${apiBase()}/admin/skills`).then(r => r.json()) as Promise<Skill[]>,
+        fetch(`${apiBase()}/admin/chatbots`).then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() as Promise<Chatbot[]>; }),
+        fetch(`${apiBase()}/admin/tools`).then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() as Promise<Tool[]>; }),
+        fetch(`${apiBase()}/admin/skills`).then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() as Promise<Skill[]>; }),
       ]);
       setItems(bots); setAllTools(tools); setAllSkills(skills);
+    } catch (err) {
+      console.error("[chatbots] load failed:", err);
+      toast({ title: "Không thể tải dữ liệu — kiểm tra server", variant: "destructive" });
     } finally { setLoading(false); }
   };
   useEffect(() => { void load(); }, []);
