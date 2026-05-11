@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { apiBase } from "@/lib/api";
+import { useWebhookBase } from "@/hooks/use-webhook-base";
 
 interface Connection {
   id: number; name: string; type: string; config: Record<string, string>;
@@ -18,7 +19,7 @@ interface Connection {
 const EMPTY: Partial<Connection> = { name: "", type: "zalo", config: {}, isActive: true };
 
 const TYPE_LABELS: Record<string, string> = {
-  zalo: "Zalo OA", messenger: "Facebook Messenger",
+  zalo: "Zalo Bot", messenger: "Facebook Messenger",
   xiaozhi: "Xiaozhi (WebSocket)", webhook: "Webhook tùy chỉnh", websocket: "WebSocket tùy chỉnh",
 };
 
@@ -26,9 +27,8 @@ const STATUS_COLOR: Record<string, string> = {
   connected: "bg-green-500", disconnected: "bg-gray-400", error: "bg-red-500", connecting: "bg-yellow-400",
 };
 
-const WEBHOOK_BASE = typeof window !== "undefined" ? window.location.origin : "";
-
 export default function ConnectionsPage() {
+  const webhookBase = useWebhookBase();
   const [items, setItems] = useState<Connection[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
@@ -128,9 +128,9 @@ export default function ConnectionsPage() {
                   <p className="text-xs font-semibold text-blue-400">Webhook URL:</p>
                   <div className="flex items-start gap-2">
                     <code className="text-xs text-blue-300 flex-1 break-all leading-relaxed">
-                      {WEBHOOK_BASE}/api/webhooks/{conn.type}
+                      {webhookBase}/api/webhooks/{conn.type}
                     </code>
-                    <Button size="sm" variant="ghost" className="h-6 w-6 p-0 shrink-0 mt-0.5" onClick={() => copy(`${WEBHOOK_BASE}/api/webhooks/${conn.type}`)}>
+                    <Button size="sm" variant="ghost" className="h-6 w-6 p-0 shrink-0 mt-0.5" onClick={() => copy(`${webhookBase}/api/webhooks/${conn.type}`)}>
                       <Copy className="h-3 w-3" />
                     </Button>
                   </div>
@@ -187,8 +187,8 @@ export default function ConnectionsPage() {
                 <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3 space-y-2">
                   <p className="text-xs font-semibold text-blue-400">Webhook URL (dán vào Zalo OA):</p>
                   <div className="flex items-start gap-2">
-                    <code className="text-xs text-blue-300 flex-1 break-all leading-relaxed">{WEBHOOK_BASE}/api/webhooks/zalo</code>
-                    <Button size="sm" variant="ghost" className="h-6 w-6 p-0 shrink-0" onClick={() => copy(`${WEBHOOK_BASE}/api/webhooks/zalo`)}>
+                    <code className="text-xs text-blue-300 flex-1 break-all leading-relaxed">{webhookBase}/api/webhooks/zalo</code>
+                    <Button size="sm" variant="ghost" className="h-6 w-6 p-0 shrink-0" onClick={() => copy(`${webhookBase}/api/webhooks/zalo`)}>
                       <Copy className="h-3 w-3" />
                     </Button>
                   </div>
@@ -212,8 +212,8 @@ export default function ConnectionsPage() {
                 <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3 space-y-2">
                   <p className="text-xs font-semibold text-blue-400">Webhook URL (dán vào Meta Developer):</p>
                   <div className="flex items-start gap-2">
-                    <code className="text-xs text-blue-300 flex-1 break-all leading-relaxed">{WEBHOOK_BASE}/api/webhooks/messenger</code>
-                    <Button size="sm" variant="ghost" className="h-6 w-6 p-0 shrink-0" onClick={() => copy(`${WEBHOOK_BASE}/api/webhooks/messenger`)}>
+                    <code className="text-xs text-blue-300 flex-1 break-all leading-relaxed">{webhookBase}/api/webhooks/messenger</code>
+                    <Button size="sm" variant="ghost" className="h-6 w-6 p-0 shrink-0" onClick={() => copy(`${webhookBase}/api/webhooks/messenger`)}>
                       <Copy className="h-3 w-3" />
                     </Button>
                   </div>

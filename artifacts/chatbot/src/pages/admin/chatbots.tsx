@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { apiBase } from "@/lib/api";
+import { useWebhookBase } from "@/hooks/use-webhook-base";
 
 interface Chatbot {
   id: number; name: string; description: string; systemPrompt: string;
@@ -19,9 +20,9 @@ interface Tool { id: number; name: string; description: string; isBuiltin: boole
 interface Skill { id: number; name: string; description: string; }
 
 const EMPTY: Partial<Chatbot> = { name: "", description: "", systemPrompt: "", model: "claude-sonnet-4-6", tools: [], skills: [], isActive: true };
-const WEBHOOK_BASE = typeof window !== "undefined" ? window.location.origin : "";
 
 export default function ChatbotsPage() {
+  const webhookBase = useWebhookBase();
   const [items, setItems] = useState<Chatbot[]>([]);
   const [allTools, setAllTools] = useState<Tool[]>([]);
   const [allSkills, setAllSkills] = useState<Skill[]>([]);
@@ -246,8 +247,8 @@ export default function ChatbotsPage() {
                   <div className="bg-muted/50 rounded-lg p-2.5 space-y-1">
                     <p className="text-xs text-muted-foreground font-medium">Webhook URL:</p>
                     <div className="flex items-center gap-2">
-                      <code className="text-xs text-blue-400 flex-1 break-all leading-relaxed">{WEBHOOK_BASE}{ch.path}</code>
-                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0 shrink-0" onClick={() => copy(`${WEBHOOK_BASE}${ch.path}`)}>
+                      <code className="text-xs text-blue-400 flex-1 break-all leading-relaxed">{webhookBase}{ch.path}</code>
+                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0 shrink-0" onClick={() => copy(`${webhookBase}${ch.path}`)}>
                         <Copy className="h-3.5 w-3.5" />
                       </Button>
                     </div>
