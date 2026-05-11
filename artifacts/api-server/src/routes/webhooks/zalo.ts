@@ -2,11 +2,11 @@ import { Router } from "express";
 import crypto from "crypto";
 import { anthropic } from "@workspace/integrations-anthropic-ai";
 import { toolDefinitions, executeTool } from "../anthropic/tools.js";
+import { db, connections } from "@workspace/db";
+import { eq } from "drizzle-orm";
 import type Anthropic from "@anthropic-ai/sdk";
 
 const router = Router();
-
-const ZALO_OA_SECRET = "TGo-n7-mcmjl629xav";
 
 const SYSTEM_PROMPT = `Bạn là nhân viên tư vấn bán hàng của **SmartHomeQ** — cửa hàng chuyên thiết bị nhà thông minh tại Việt Nam.
 Website chính thức: https://smarthomeq.tech
@@ -19,16 +19,26 @@ Nhiệm vụ của bạn:
 - Trả lời ngắn gọn phù hợp Zalo (không dùng markdown phức tạp, không hiển thị hình ảnh).
 - Luôn ưu tiên tư vấn Zigbee hơn WiFi.`;
 
-function verifyZaloSignature(body: string, signature: string): boolean {
+async function getZaloConfig(): Promise<{ accessToken: string; secretToken: string } | null> {
+  const [conn] = await db.select().from(connections).where(eq(connections.type, "zalo")).limit(1);
+  if (!conn) return null;
+  const config = conn.config as Record<string, string>;
+  return {
+    accessToken: config.accessToken ?? "",
+    secretToken: config.secretToken ?? "",
+  };
+}
+
+function verifyZaloSignature(rawBody: Buffer, signature: string, secret: string): boolean {
   const hash = crypto
-    .createHmac("sha256", ZALO_OA_SECRET)
-    .update(body)
+    .createHmac("sha256", secret)
+    .update(rawBody)
     .digest("hex");
   return hash === signature;
 }
 
 async function sendZaloMessage(accessToken: string, userId: string, text: string) {
-  await fetch("https://openapi.zalo.me/v3.0/oa/message/cs", {
+  const res = await fetch("https://openapi.zalo.me/v3.0/oa/message/cs", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -39,6 +49,13 @@ async function sendZaloMessage(accessToken: string, userId: string, text: string
       message: { text: text.slice(0, 2000) },
     }),
   });
+  const data = await res.json() as { error: number; message?: string };
+  if (data.error !== 0) {
+    console.error("[Zalo] sendMessage error:", JSON.stringify(data));
+  } else {
+    console.log("[Zalo] sendMessage OK to", userId);
+  }
+  return data;
 }
 
 async function getAiReply(userMessage: string): Promise<string> {
@@ -90,33 +107,58 @@ router.get("/zalo", (req, res) => {
 });
 
 router.post("/zalo", async (req, res) => {
-  const signature = req.headers["x-zevent-signature"] as string ?? "";
-  const rawBody = JSON.stringify(req.body);
+  // Log toàn bộ request để debug
+  console.log("[Zalo] incoming headers:", JSON.stringify(req.headers));
+  console.log("[Zalo] incoming body:", JSON.stringify(req.body));
 
-  if (signature && !verifyZaloSignature(rawBody, signature.replace("sha256=", ""))) {
-    res.status(403).json({ error: "Invalid signature" });
+  const config = await getZaloConfig();
+  if (!config || !config.accessToken) {
+    console.error("[Zalo] No Zalo connection configured in DB");
+    res.status(200).json({ error: 0 });
     return;
+  }
+
+  // Xác thực chữ ký (dùng raw body)
+  const signature = (req.headers["x-zevent-signature"] as string ?? "").replace("sha256=", "");
+  if (signature && req.rawBody) {
+    if (!verifyZaloSignature(req.rawBody, signature, config.secretToken)) {
+      console.error("[Zalo] Signature mismatch! Expected secret:", config.secretToken);
+      res.status(403).json({ error: "Invalid signature" });
+      return;
+    }
+    console.log("[Zalo] Signature OK");
+  } else {
+    console.log("[Zalo] No signature header — skipping verification");
   }
 
   const body = req.body as {
     event_name?: string;
     message?: { text?: string; msg_id?: string };
     sender?: { id?: string };
+    follower?: { id?: string };
     app_id?: string | number;
   };
 
-  if (body.event_name !== "user_send_text" || !body.message?.text || !body.sender?.id) {
+  // Xử lý nhiều dạng event Zalo OA
+  const eventName = body.event_name ?? "";
+  const userId = body.sender?.id ?? body.follower?.id ?? "";
+  const userText = body.message?.text ?? "";
+
+  console.log("[Zalo] event_name:", eventName, "| userId:", userId, "| text:", userText);
+
+  if (!["user_send_text", "user_send_image", "user_send_sticker"].includes(eventName) || !userText || !userId) {
+    console.log("[Zalo] Not a text message — skipping AI reply");
     res.status(200).json({ error: 0 });
     return;
   }
 
-  const userId = body.sender.id;
-  const userText = body.message.text;
-
+  // Trả về 200 ngay để Zalo không retry
   res.status(200).json({ error: 0 });
 
-  const ZALO_ACCESS_TOKEN = "4544700640850963554:KcaEvbjTxlAMfsiwspmsBkmIyqpGeqkvtkvwuDXOwztRPvyDXsffxSAfLiwdYrQH";
-  getAiReply(userText).then(reply => sendZaloMessage(ZALO_ACCESS_TOKEN, userId, reply)).catch(console.error);
+  // Gọi AI và gửi trả lời async
+  getAiReply(userText)
+    .then(reply => sendZaloMessage(config.accessToken, userId, reply))
+    .catch(err => console.error("[Zalo] AI/send error:", err));
 });
 
 export default router;
