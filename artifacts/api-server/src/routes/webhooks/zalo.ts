@@ -38,24 +38,56 @@ function verifyZaloSignature(rawBody: Buffer, signature: string, secret: string)
 }
 
 async function sendZaloMessage(accessToken: string, userId: string, text: string) {
-  const res = await fetch("https://openapi.zalo.me/v3.0/oa/message/cs", {
+  const payload = JSON.stringify({
+    recipient: { user_id: userId },
+    message: { text: text.slice(0, 2000) },
+  });
+
+  // Thử v3.0 trước
+  const res3 = await fetch("https://openapi.zalo.me/v3.0/oa/message/cs", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "access_token": accessToken,
-    },
+    headers: { "Content-Type": "application/json", "access_token": accessToken },
+    body: payload,
+  });
+  const data3 = await res3.json() as { error: number; message?: string };
+  console.log("[Zalo] v3.0 response:", JSON.stringify(data3));
+
+  if (data3.error === 0) {
+    console.log("[Zalo] v3.0 sendMessage OK to", userId);
+    return data3;
+  }
+
+  // Fallback v2.0 (HTTP API token dạng OA_ID:secret dùng được với v2.0)
+  const res2 = await fetch("https://openapi.zalo.me/v2.0/oa/message", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "access_token": accessToken },
+    body: JSON.stringify({
+      recipient: { user_id: userId },
+      message: { attachment: { type: "template", payload: { template_type: "media", elements: [{ media_type: "text", url: "" }] } } },
+    }),
+  });
+  const data2raw = await res2.text();
+  console.log("[Zalo] v2.0 raw response:", data2raw);
+
+  // v2.0 text message (simpler format)
+  const res2txt = await fetch("https://openapi.zalo.me/v2.0/oa/message", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "access_token": accessToken },
     body: JSON.stringify({
       recipient: { user_id: userId },
       message: { text: text.slice(0, 2000) },
     }),
   });
-  const data = await res.json() as { error: number; message?: string };
-  if (data.error !== 0) {
-    console.error("[Zalo] sendMessage error:", JSON.stringify(data));
+  const data2 = await res2txt.json() as { error: number; message?: string };
+  console.log("[Zalo] v2.0 text response:", JSON.stringify(data2));
+
+  if (data2.error === 0) {
+    console.log("[Zalo] v2.0 sendMessage OK to", userId);
   } else {
-    console.log("[Zalo] sendMessage OK to", userId);
+    console.error("[Zalo] Both v3 and v2 failed. Check token validity and OA permissions.");
+    console.error("[Zalo] Token used (first 40 chars):", accessToken.slice(0, 40) + "...");
   }
-  return data;
+  return data2;
 }
 
 async function getAiReply(userMessage: string): Promise<string> {
