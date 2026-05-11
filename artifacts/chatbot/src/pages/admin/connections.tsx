@@ -181,24 +181,36 @@ export default function ConnectionsPage() {
             {selectedType === "zalo" && (
               <div className="space-y-3">
                 <div className="space-y-1.5">
-                  <Label className="text-sm">Access Token</Label>
-                  <Input value={configStr.accessToken ?? ""} onChange={e => setConfigStr(s => ({ ...s, accessToken: e.target.value }))} placeholder="Token tích hợp HTTP API" className="font-mono text-xs" />
+                  <Label className="text-sm">Bot Access Token</Label>
+                  <Input value={configStr.accessToken ?? ""} onChange={e => setConfigStr(s => ({ ...s, accessToken: e.target.value }))} placeholder="OA_ID:token (từ chatbot.zalo.me)" className="font-mono text-xs" />
+                  <p className="text-[11px] text-muted-foreground">Lấy tại chatbot.zalo.me → chọn bot → Cài đặt → Access Token</p>
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-sm">Secret Token</Label>
-                  <Input value={configStr.secretToken ?? ""} onChange={e => setConfigStr(s => ({ ...s, secretToken: e.target.value }))} placeholder="Secret token webhook" className="font-mono text-xs" />
+                  <Label className="text-sm">Secret Token (OA Secret)</Label>
+                  <Input value={configStr.secretToken ?? ""} onChange={e => setConfigStr(s => ({ ...s, secretToken: e.target.value }))} placeholder="Secret token xác thực webhook" className="font-mono text-xs" />
+                  <p className="text-[11px] text-muted-foreground">Lấy tại Zalo OA → Quản lý ứng dụng → Secret Token</p>
                 </div>
-                <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3 space-y-2">
-                  <p className="text-xs font-semibold text-blue-400">Webhook URL (dán vào Zalo OA):</p>
+                <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3 space-y-2.5">
+                  <p className="text-xs font-semibold text-blue-400">Webhook URL — dán vào Zalo Bot dashboard:</p>
                   <div className="flex items-start gap-2">
                     <code className="text-xs text-blue-300 flex-1 break-all leading-relaxed">{webhookBase}/api/webhooks/zalo</code>
                     <Button size="sm" variant="ghost" className="h-6 w-6 p-0 shrink-0" onClick={() => copy(`${webhookBase}/api/webhooks/zalo`)}>
                       <Copy className="h-3 w-3" />
                     </Button>
                   </div>
-                  <a href="https://developers.zalo.me/app" target="_blank" rel="noreferrer" className="text-xs text-blue-400 flex items-center gap-1 hover:underline">
-                    <ExternalLink className="h-3 w-3" /> Zalo Developer Console
-                  </a>
+                  {webhookBase.includes("spock.replit.dev") && (
+                    <p className="text-[11px] text-yellow-400 bg-yellow-500/10 rounded px-2 py-1.5">
+                      Đây là URL dev. Sau khi publish, mở app production để lấy URL thật để dán vào Zalo Bot.
+                    </p>
+                  )}
+                  <div className="flex gap-3">
+                    <a href="https://chatbot.zalo.me" target="_blank" rel="noreferrer" className="text-xs text-blue-400 flex items-center gap-1 hover:underline">
+                      <ExternalLink className="h-3 w-3" /> Zalo Bot Dashboard
+                    </a>
+                    <a href="https://oa.zalo.me/manage" target="_blank" rel="noreferrer" className="text-xs text-blue-400 flex items-center gap-1 hover:underline">
+                      <ExternalLink className="h-3 w-3" /> Zalo OA Manager
+                    </a>
+                  </div>
                 </div>
               </div>
             )}

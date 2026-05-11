@@ -235,7 +235,7 @@ export default function ChatbotsPage() {
             <div className="space-y-3">
               <p className="text-sm text-muted-foreground">Webhook URL để kết nối với các nền tảng bên ngoài.</p>
               {[
-                { key: "zalo", label: "Zalo OA", emoji: "🟦", path: "/api/webhooks/zalo", link: "https://developers.zalo.me/app", linkLabel: "Zalo Developer Console" },
+                { key: "zalo", label: "Zalo Bot", emoji: "🟦", path: "/api/webhooks/zalo", link: "https://chatbot.zalo.me", linkLabel: "Zalo Bot Dashboard" },
                 { key: "messenger", label: "Facebook Messenger", emoji: "💬", path: "/api/webhooks/messenger", link: "https://developers.facebook.com/apps", linkLabel: "Meta Developer Console" },
               ].map(ch => (
                 <div key={ch.key} className="border rounded-xl p-3 sm:p-4 space-y-2.5">
@@ -248,13 +248,16 @@ export default function ChatbotsPage() {
                     </div>
                   </div>
                   <div className="bg-muted/50 rounded-lg p-2.5 space-y-1">
-                    <p className="text-xs text-muted-foreground font-medium">Webhook URL:</p>
+                    <p className="text-xs text-muted-foreground font-medium">Webhook URL — dán vào {ch.label}:</p>
                     <div className="flex items-center gap-2">
                       <code className="text-xs text-blue-400 flex-1 break-all leading-relaxed">{webhookBase}{ch.path}</code>
                       <Button size="sm" variant="ghost" className="h-7 w-7 p-0 shrink-0" onClick={() => copy(`${webhookBase}${ch.path}`)}>
                         <Copy className="h-3.5 w-3.5" />
                       </Button>
                     </div>
+                    {webhookBase.includes("spock.replit.dev") && (
+                      <p className="text-[11px] text-yellow-400">Mở app production để lấy URL thật</p>
+                    )}
                   </div>
                   <a href={ch.link} target="_blank" rel="noreferrer" className="text-xs text-blue-400 flex items-center gap-1 hover:underline">
                     <ExternalLink className="h-3 w-3" /> {ch.linkLabel}
