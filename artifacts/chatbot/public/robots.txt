@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://tao-server--minhquanthuhien.replit.app/sitemap.xml
