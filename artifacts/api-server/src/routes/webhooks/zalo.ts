@@ -139,10 +139,14 @@ router.post("/zalo", async (req, res) => {
     console.log("[Zalo Bot] No mac header — skipping verification");
   }
 
-  // Zalo Bot payload có thể có nhiều dạng khác nhau
+  // Zalo Bot payload structure (bot.zalo.me)
   const body = req.body as {
     event_name?: string;
-    message?: { text?: string; msg_id?: string };
+    message?: {
+      text?: string;
+      msg_id?: string;
+      from?: { id?: string; display_name?: string };
+    };
     sender?: { id?: string };
     user_id_by_app?: string;
     follower?: { id?: string };
@@ -151,15 +155,44 @@ router.post("/zalo", async (req, res) => {
   };
 
   const eventName = body.event_name ?? "";
-  // Thử lấy userId từ nhiều field khác nhau (Bot vs OA có cấu trúc khác)
-  const userId = body.sender?.id ?? body.user_id_by_app ?? body.follower?.id ?? body.from?.id ?? "";
+  // Zalo Bot đặt userId trong message.from.id (khác OA)
+  const userId =
+    body.message?.from?.id ??
+    body.sender?.id ??
+    body.user_id_by_app ??
+    body.follower?.id ??
+    body.from?.id ??
+    "";
   const userText = body.message?.text ?? "";
 
   console.log("[Zalo Bot] event:", eventName, "| userId:", userId, "| text:", userText);
 
-  const textEvents = ["user_send_text", "user_send_image", "user_send_sticker", "follow"];
-  if (!textEvents.includes(eventName) || !userText || !userId) {
-    console.log("[Zalo Bot] Skipped — not a text message or missing fields");
+  // Zalo Bot dùng event names dạng "message.text.received" (khác OA dùng "user_send_text")
+  const textEvents = [
+    "message.text.received",      // Zalo Bot format
+    "user_send_text",             // Zalo OA format (fallback)
+    "message.image.received",
+    "user_send_image",
+  ];
+  const stickerEvents = ["message.sticker.received", "user_send_sticker"];
+
+  if (!userId) {
+    console.log("[Zalo Bot] Skipped — no userId");
+    res.status(200).json({ error: 0 });
+    return;
+  }
+
+  // Sticker → trả lời thân thiện
+  if (stickerEvents.includes(eventName)) {
+    res.status(200).json({ error: 0 });
+    getAiReply("Khách gửi sticker, hãy chào thân thiện và hỏi khách cần tư vấn gì về nhà thông minh.")
+      .then(reply => sendZaloBotMessage(config.accessToken, userId, reply))
+      .catch(err => console.error("[Zalo Bot] Error:", err));
+    return;
+  }
+
+  if (!textEvents.includes(eventName) || !userText) {
+    console.log("[Zalo Bot] Skipped — not a handled event or no text");
     res.status(200).json({ error: 0 });
     return;
   }
