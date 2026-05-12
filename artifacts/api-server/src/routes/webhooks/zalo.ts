@@ -19,13 +19,14 @@ Nhiệm vụ của bạn:
 - Trả lời ngắn gọn phù hợp Zalo (không dùng markdown, không dùng **, không dùng #, viết thường).
 - Luôn ưu tiên tư vấn Zigbee hơn WiFi.`;
 
-async function getZaloConfig(): Promise<{ accessToken: string; secretToken: string } | null> {
+async function getZaloConfig(): Promise<{ accessToken: string; secretToken: string; oaAccessToken: string } | null> {
   const [conn] = await db.select().from(connections).where(eq(connections.type, "zalo")).limit(1);
   if (!conn) return null;
   const config = conn.config as Record<string, string>;
   return {
     accessToken: config.accessToken ?? "",
     secretToken: config.secretToken ?? "",
+    oaAccessToken: config.oaAccessToken ?? "",
   };
 }
 
@@ -34,17 +35,50 @@ function verifyMac(rawBody: Buffer, mac: string, secret: string): boolean {
   return hash === mac;
 }
 
-// Zalo Bot API — dùng cho bot.zalo.me (khác OA)
-async function sendZaloBotMessage(botToken: string, userId: string, text: string) {
-  const url = "https://bot.zalo.me/api/message";
+// Gửi tin nhắn Zalo — ưu tiên openapi.zalo.me (OA API, accessible từ ngoài VN)
+// bot.zalo.me chỉ accessible trong mạng nội bộ VN nên không dùng được từ Replit North America
+async function sendZaloBotMessage(
+  botToken: string,
+  userId: string,
+  text: string,
+  oaAccessToken?: string,
+) {
+  const shortText = text.slice(0, 2000);
+  console.log("[Zalo] Sending to userId:", userId, "| text length:", text.length);
+
+  // Thử openapi.zalo.me trước nếu có OA access token
+  if (oaAccessToken) {
+    console.log("[Zalo] Using openapi.zalo.me (OA API) with oaAccessToken");
+    const body = JSON.stringify({
+      recipient: { user_id: userId },
+      message: { text: shortText },
+    });
+    try {
+      const res = await fetch("https://openapi.zalo.me/v2.0/oa/message", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "access_token": oaAccessToken,
+        },
+        body,
+      });
+      const raw = await res.text();
+      console.log("[Zalo] OA API response (", res.status, "):", raw);
+      const parsed = JSON.parse(raw) as { error: number; message?: string };
+      if (parsed.error === 0) return parsed;
+      console.warn("[Zalo] OA API error, falling back to bot.zalo.me:", raw);
+    } catch (err) {
+      console.warn("[Zalo] OA API failed:", err instanceof Error ? err.message : err);
+    }
+  }
+
+  // Fallback: bot.zalo.me (chỉ hoạt động trong VN network)
+  console.log("[Zalo] Using bot.zalo.me with botToken");
   const body = JSON.stringify({
     recipient: { user_id: userId },
-    message: { text: text.slice(0, 2000) },
+    message: { text: shortText },
   });
-
-  console.log("[Zalo Bot] Sending to userId:", userId, "| text length:", text.length);
-
-  const res = await fetch(url, {
+  const res = await fetch("https://bot.zalo.me/api/message", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -52,10 +86,8 @@ async function sendZaloBotMessage(botToken: string, userId: string, text: string
     },
     body,
   });
-
   const raw = await res.text();
-  console.log("[Zalo Bot] API response (", res.status, "):", raw);
-
+  console.log("[Zalo] Bot API response (", res.status, "):", raw);
   try {
     return JSON.parse(raw) as { error: number; message?: string };
   } catch {
@@ -203,10 +235,10 @@ router.post("/zalo", async (req, res) => {
   // Gọi AI async và gửi trả lời
   getAiReply(userText)
     .then(reply => {
-      console.log("[Zalo Bot] AI replied:", reply.slice(0, 100) + "...");
-      return sendZaloBotMessage(config.accessToken, userId, reply);
+      console.log("[Zalo] AI replied:", reply.slice(0, 100) + "...");
+      return sendZaloBotMessage(config.accessToken, userId, reply, config.oaAccessToken || undefined);
     })
-    .catch(err => console.error("[Zalo Bot] Error:", err));
+    .catch(err => console.error("[Zalo] Error:", err));
 });
 
 export default router;

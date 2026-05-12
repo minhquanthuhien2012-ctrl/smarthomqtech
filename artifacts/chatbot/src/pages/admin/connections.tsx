@@ -186,6 +186,11 @@ export default function ConnectionsPage() {
                   <p className="text-[11px] text-muted-foreground">Lấy tại chatbot.zalo.me → chọn bot → Cài đặt → Access Token</p>
                 </div>
                 <div className="space-y-1.5">
+                  <Label className="text-sm">OA Access Token <span className="text-yellow-400">⚡ Bắt buộc để gửi tin</span></Label>
+                  <Input value={configStr.oaAccessToken ?? ""} onChange={e => setConfigStr(s => ({ ...s, oaAccessToken: e.target.value }))} placeholder="Lấy tại oa.zalo.me/manage" className="font-mono text-xs" />
+                  <p className="text-[11px] text-muted-foreground">Vào <a href="https://oa.zalo.me/manage" target="_blank" rel="noreferrer" className="text-blue-400 underline">oa.zalo.me/manage</a> → chọn OA → Quản lý ứng dụng → Access Token → Tạo mới</p>
+                </div>
+                <div className="space-y-1.5">
                   <Label className="text-sm">Secret Token (OA Secret)</Label>
                   <Input value={configStr.secretToken ?? ""} onChange={e => setConfigStr(s => ({ ...s, secretToken: e.target.value }))} placeholder="Secret token xác thực webhook" className="font-mono text-xs" />
                   <p className="text-[11px] text-muted-foreground">Lấy tại Zalo OA → Quản lý ứng dụng → Secret Token</p>
