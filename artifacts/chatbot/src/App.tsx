@@ -11,7 +11,6 @@ import FilesPage from "@/pages/files-page";
 import ChatbotsPage from "@/pages/admin/chatbots";
 import ToolsPage from "@/pages/admin/tools";
 import SkillsPage from "@/pages/admin/skills";
-import ConnectionsPage from "@/pages/admin/connections";
 import { useEffect } from "react";
 import { apiBase } from "@/lib/api";
 
@@ -50,11 +49,6 @@ function Router() {
       <Route path="/skills">
         <MainLayout title="Skills">
           <SkillsPage />
-        </MainLayout>
-      </Route>
-      <Route path="/connections">
-        <MainLayout title="Kết nối">
-          <ConnectionsPage />
         </MainLayout>
       </Route>
       <Route path="/files">
