@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import {
   LayoutDashboard, Bot, Wrench, Zap, MessageSquare,
-  Menu, X, ChevronRight, Settings
+  Menu, ChevronRight, Settings, ClipboardList
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -12,6 +12,7 @@ const NAV_ITEMS = [
   { href: "/admin/chatbots", label: "Chatbots & Kết nối", icon: Bot },
   { href: "/admin/tools", label: "Tools", icon: Wrench },
   { href: "/admin/skills", label: "Skills", icon: Zap },
+  { href: "/admin/tool-requests", label: "Yêu cầu Tool/Skill", icon: ClipboardList },
   { href: "/", label: "Chat", icon: MessageSquare },
 ];
 

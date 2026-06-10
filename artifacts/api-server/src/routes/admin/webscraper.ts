@@ -404,4 +404,170 @@ router.delete("/drafts/:id", async (req, res) => {
   res.status(204).end();
 });
 
+router.get("/sites/:id/categories", async (req, res) => {
+  const id = Number(req.params.id);
+  const [site] = await db.select().from(scrapedSites).where(eq(scrapedSites.id, id));
+  if (!site) { res.status(404).json({ error: "Not found" }); return; }
+  res.json({ categories: site.categories ?? [], name: site.name, type: site.type });
+});
+
+router.put("/sites/:id/categories", async (req, res) => {
+  const id = Number(req.params.id);
+  const { categories } = req.body as { categories: unknown[] };
+  if (!Array.isArray(categories)) { res.status(400).json({ error: "categories must be array" }); return; }
+  const [row] = await db.update(scrapedSites).set({ categories, updatedAt: new Date() }).where(eq(scrapedSites.id, id)).returning();
+  if (!row) { res.status(404).json({ error: "Not found" }); return; }
+  res.json(row);
+});
+
+router.post("/sites/:id/woo-update/:itemId", async (req, res) => {
+  const siteId = Number(req.params.id);
+  const itemId = Number(req.params.itemId);
+
+  const [site] = await db.select().from(scrapedSites).where(eq(scrapedSites.id, siteId));
+  if (!site) { res.status(404).json({ error: "Site not found" }); return; }
+  const [item] = await db.select().from(scrapedItems).where(eq(scrapedItems.id, itemId));
+  if (!item) { res.status(404).json({ error: "Item not found" }); return; }
+
+  const credentials = site.credentials as Record<string, string>;
+  const raw = item.rawData as Record<string, unknown>;
+  const wooProductId = raw?.id as number | undefined;
+
+  const { title, content, price, category } = req.body as { title?: string; content?: string; price?: string; category?: string };
+
+  const [updatedItem] = await db.update(scrapedItems).set({
+    title: title ?? item.title,
+    content: content ?? item.content,
+    price: price ?? item.price,
+    category: category ?? item.category,
+    updatedAt: new Date(),
+  }).where(eq(scrapedItems.id, itemId)).returning();
+
+  if (site.type === "woocommerce" && credentials.consumerKey && credentials.consumerSecret && wooProductId) {
+    try {
+      const apiUrl = `${site.url.replace(/\/$/, "")}/wp-json/wc/v3/products/${wooProductId}?consumer_key=${credentials.consumerKey}&consumer_secret=${credentials.consumerSecret}`;
+      const wooBody: Record<string, unknown> = {};
+      if (title) wooBody.name = title;
+      if (content) wooBody.description = content;
+      if (price) wooBody.regular_price = price;
+      const wooRes = await fetch(apiUrl, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(wooBody),
+        signal: AbortSignal.timeout(15000),
+      });
+      if (!wooRes.ok) {
+        const errText = await wooRes.text();
+        res.json({ item: updatedItem, wooSync: false, wooError: `HTTP ${wooRes.status}: ${errText.slice(0, 200)}` });
+        return;
+      }
+      const wooData = await wooRes.json() as Record<string, unknown>;
+      const [refreshed] = await db.update(scrapedItems).set({ rawData: wooData as Record<string, unknown>, updatedAt: new Date() }).where(eq(scrapedItems.id, itemId)).returning();
+      res.json({ item: refreshed, wooSync: true });
+      return;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      res.json({ item: updatedItem, wooSync: false, wooError: msg });
+      return;
+    }
+  }
+
+  res.json({ item: updatedItem, wooSync: false, note: "Not a WooCommerce site or missing credentials" });
+});
+
+router.post("/sites/:id/product-form", async (req, res) => {
+  const id = Number(req.params.id);
+  const { itemId, quickFill } = req.body as { itemId?: number; quickFill?: boolean };
+
+  const [site] = await db.select().from(scrapedSites).where(eq(scrapedSites.id, id));
+  if (!site) { res.status(404).json({ error: "Not found" }); return; }
+
+  let itemData = "";
+  if (itemId) {
+    const [item] = await db.select().from(scrapedItems).where(eq(scrapedItems.id, itemId));
+    if (item) {
+      itemData = `Tên: ${item.title}\nGiá: ${item.price}\nDanh mục: ${item.category}\nMô tả: ${item.content.slice(0, 800)}`;
+    }
+  }
+
+  const resp = await anthropic.messages.create({
+    model: "claude-haiku-3-5",
+    max_tokens: 2000,
+    messages: [{
+      role: "user",
+      content: `Tạo form điền thông tin sản phẩm cho website ${site.type || ""}. Trả về JSON:
+{
+  "fields": [
+    {"key":"name","label":"Tên sản phẩm","type":"text","required":true,"value":""},
+    {"key":"price","label":"Giá bán","type":"text","required":true,"value":""},
+    {"key":"description","label":"Mô tả ngắn","type":"textarea","required":false,"value":""},
+    {"key":"fullDescription","label":"Mô tả chi tiết","type":"textarea","required":false,"value":""},
+    {"key":"category","label":"Danh mục","type":"text","required":false,"value":""},
+    {"key":"sku","label":"Mã SKU","type":"text","required":false,"value":""},
+    {"key":"imageUrl","label":"Link ảnh","type":"text","required":false,"value":""}
+  ]
+}
+${itemData ? `\nThông tin sản phẩm mẫu (điền vào value nếu có thể):\n${itemData}` : ""}
+${quickFill && itemData ? "\nHãy điền đầy đủ value cho tất cả các trường từ thông tin mẫu, AI hỗ trợ viết lại chuyên nghiệp." : ""}
+Chỉ trả về JSON.`,
+    }],
+  });
+
+  const raw = resp.content[0].type === "text" ? resp.content[0].text : "{}";
+  const match = raw.match(/\{[\s\S]*\}/);
+  const parsed = match ? JSON.parse(match[0]) as { fields?: unknown[] } : { fields: [] };
+  res.json(parsed);
+});
+
+router.post("/sites/:id/woo-create", async (req, res) => {
+  const id = Number(req.params.id);
+  const [site] = await db.select().from(scrapedSites).where(eq(scrapedSites.id, id));
+  if (!site) { res.status(404).json({ error: "Not found" }); return; }
+
+  const { name, price, description, fullDescription, category, sku, imageUrl, targetCategory } = req.body as Record<string, string>;
+
+  const [draft] = await db.insert(draftPosts).values({
+    siteId: id,
+    title: name || "Sản phẩm mới",
+    content: `${description || ""}\n\n${fullDescription || ""}`.trim(),
+    sourceUrl: "",
+    targetCategory: targetCategory || category || "",
+    status: "pending",
+    postType: "product",
+  }).returning();
+
+  if (site.type === "woocommerce") {
+    const credentials = site.credentials as Record<string, string>;
+    if (credentials.consumerKey && credentials.consumerSecret) {
+      try {
+        const apiUrl = `${site.url.replace(/\/$/, "")}/wp-json/wc/v3/products?consumer_key=${credentials.consumerKey}&consumer_secret=${credentials.consumerSecret}`;
+        const wooBody: Record<string, unknown> = {
+          name, regular_price: price, description: fullDescription || description,
+          short_description: description, status: "draft",
+        };
+        if (sku) wooBody.sku = sku;
+        if (imageUrl) wooBody.images = [{ src: imageUrl }];
+        const wooRes = await fetch(apiUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(wooBody),
+          signal: AbortSignal.timeout(15000),
+        });
+        if (wooRes.ok) {
+          const wooData = await wooRes.json() as Record<string, unknown>;
+          const [updated] = await db.update(draftPosts).set({
+            publishedUrl: (wooData.permalink as string) || "",
+            status: "approved",
+            updatedAt: new Date(),
+          }).where(eq(draftPosts.id, draft.id)).returning();
+          res.status(201).json({ draft: updated, wooProduct: wooData, created: true });
+          return;
+        }
+      } catch { /* fall through to draft */ }
+    }
+  }
+
+  res.status(201).json({ draft, created: false, note: "Lưu vào Chờ duyệt — đăng thủ công sau" });
+});
+
 export default router;

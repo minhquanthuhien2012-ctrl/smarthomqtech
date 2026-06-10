@@ -1,0 +1,1 @@
+- [AI ca nhan webapp design](ai-ca-nhan-design.md) — full spec for SmartHomeQ web app "AI cá nhân": chat + tool/skill request system + 4-tab webscraper

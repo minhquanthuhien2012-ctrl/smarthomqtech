@@ -5,6 +5,7 @@ import skillsRouter from "./skills.js";
 import connectionsRouter from "./connections.js";
 import filesRouter from "./files.js";
 import webscraperRouter from "./webscraper.js";
+import toolRequestsRouter from "./tool-requests.js";
 
 const router = Router();
 
@@ -14,5 +15,6 @@ router.use("/skills", skillsRouter);
 router.use("/connections", connectionsRouter);
 router.use("/files", filesRouter);
 router.use("/webscraper", webscraperRouter);
+router.use("/tool-requests", toolRequestsRouter);
 
 export default router;

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import {
   MessageSquare, Bot, Wrench, Zap, Link2, FolderTree,
-  Menu, ChevronRight, Home
+  Menu, ChevronRight, Home, ClipboardList
 } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,7 @@ export const NAV_ITEMS = [
   { href: "/skills", label: "Skills", icon: Zap, group: "manage" },
   { href: "/connections", label: "Kết nối", icon: Link2, group: "manage" },
   { href: "/files", label: "Files", icon: FolderTree, group: "manage" },
+  { href: "/tool-requests", label: "Yêu cầu Tool", icon: ClipboardList, group: "manage" },
 ];
 
 function isActive(item: typeof NAV_ITEMS[0], location: string) {
