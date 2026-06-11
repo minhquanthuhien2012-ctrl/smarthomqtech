@@ -24,3 +24,4 @@ export * from "./tools";
 export * from "./connections";
 export * from "./skills";
 export * from "./webscraper";
+export * from "./users";

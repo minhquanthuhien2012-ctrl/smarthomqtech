@@ -6,6 +6,7 @@ import connectionsRouter from "./connections.js";
 import filesRouter from "./files.js";
 import webscraperRouter from "./webscraper.js";
 import toolRequestsRouter from "./tool-requests.js";
+import usersRouter from "./users.js";
 
 const router = Router();
 
@@ -16,5 +17,6 @@ router.use("/connections", connectionsRouter);
 router.use("/files", filesRouter);
 router.use("/webscraper", webscraperRouter);
 router.use("/tool-requests", toolRequestsRouter);
+router.use("/users", usersRouter);
 
 export default router;
