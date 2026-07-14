@@ -6,6 +6,7 @@ import webhooksRouter from "./webhooks/zalo.js";
 import configRouter from "./config.js";
 import authRouter from "./auth.js";
 import userRouter from "./user/index.js";
+import userChatRouter from "./user/chat.js";
 
 const router: IRouter = Router();
 
@@ -13,6 +14,7 @@ router.use(healthRouter);
 router.use(configRouter);
 router.use("/auth", authRouter);
 router.use("/user", userRouter);
+router.use("/user/chat", userChatRouter);
 router.use("/anthropic", anthropicRouter);
 router.use("/admin", adminRouter);
 router.use("/webhooks", webhooksRouter);

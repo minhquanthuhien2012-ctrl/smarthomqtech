@@ -2,7 +2,7 @@ import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { fetch as expoFetch } from "expo/fetch";
 import { router, useLocalSearchParams } from "expo-router";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -26,6 +26,11 @@ interface Message {
   streaming?: boolean;
 }
 
+interface ToolCallStatus {
+  name: string;
+  status: "starting" | "running" | "done" | "error";
+}
+
 export default function ConversationScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const colors = useColors();
@@ -37,13 +42,15 @@ export default function ConversationScreen() {
   const [loading, setLoading] = useState(true);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
+  const [activeTools, setActiveTools] = useState<ToolCallStatus[]>([]);
 
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch(`${baseUrl}/api/anthropic/conversations/${id}`, {
+        const res = await fetch(`${baseUrl}/api/user/chat/conversations/${id}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
+        if (!res.ok) throw new Error();
         const data = await res.json();
         setTitle(data.title || "Cuộc trò chuyện");
         const msgs: Message[] = (data.messages || []).map(
@@ -54,7 +61,9 @@ export default function ConversationScreen() {
           })
         );
         setMessages(msgs);
-      } catch {}
+      } catch {
+        router.back();
+      }
       setLoading(false);
     })();
   }, [id, baseUrl, token]);
@@ -68,16 +77,14 @@ export default function ConversationScreen() {
     const userMsg: Message = { id: `u_${Date.now()}`, role: "user", content };
     setMessages((prev) => [...prev, userMsg]);
 
-    const assistantMsgId = `a_${Date.now()}`;
-    setMessages((prev) => [
-      ...prev,
-      { id: assistantMsgId, role: "assistant", content: "", streaming: true },
-    ]);
+    const aId = `a_${Date.now()}`;
+    setMessages((prev) => [...prev, { id: aId, role: "assistant", content: "", streaming: true }]);
     setStreaming(true);
+    setActiveTools([]);
 
     try {
       const res = await expoFetch(
-        `${baseUrl}/api/anthropic/conversations/${id}/messages`,
+        `${baseUrl}/api/user/chat/conversations/${id}/messages`,
         {
           method: "POST",
           headers: {
@@ -105,36 +112,48 @@ export default function ConversationScreen() {
         for (const line of lines) {
           if (!line.startsWith("data: ")) continue;
           const raw = line.slice(6).trim();
-          if (!raw || raw === "[DONE]") continue;
+          if (!raw) continue;
           try {
-            const evt = JSON.parse(raw);
-            if (evt.type === "content_block_delta" && evt.delta?.type === "text_delta") {
-              fullText += evt.delta.text;
+            const evt = JSON.parse(raw) as {
+              content?: string;
+              done?: boolean;
+              error?: string;
+              tool_call?: { name: string; status: string };
+            };
+            if (evt.content) {
+              fullText += evt.content;
               setMessages((prev) =>
-                prev.map((m) => m.id === assistantMsgId ? { ...m, content: fullText } : m)
+                prev.map((m) => m.id === aId ? { ...m, content: fullText } : m)
               );
-            } else if (evt.type === "delta" && evt.text) {
-              fullText += evt.text;
-              setMessages((prev) =>
-                prev.map((m) => m.id === assistantMsgId ? { ...m, content: fullText } : m)
-              );
+            } else if (evt.tool_call) {
+              const tc = evt.tool_call;
+              setActiveTools((prev) => {
+                const idx = prev.findIndex((t) => t.name === tc.name);
+                if (idx >= 0) {
+                  const copy = [...prev];
+                  copy[idx] = { name: tc.name, status: tc.status as ToolCallStatus["status"] };
+                  return copy;
+                }
+                return [...prev, { name: tc.name, status: tc.status as ToolCallStatus["status"] }];
+              });
+            } else if (evt.done) {
+              break;
             }
           } catch {}
         }
       }
       setMessages((prev) =>
-        prev.map((m) => m.id === assistantMsgId ? { ...m, streaming: false, content: fullText || m.content } : m)
+        prev.map((m) => m.id === aId ? { ...m, streaming: false, content: fullText || m.content } : m)
       );
     } catch {
       setMessages((prev) =>
         prev.map((m) =>
-          m.id === assistantMsgId
-            ? { ...m, streaming: false, content: "Có lỗi xảy ra. Vui lòng thử lại." }
-            : m
+          m.id === aId ? { ...m, streaming: false, content: "Có lỗi xảy ra. Vui lòng thử lại." } : m
         )
       );
     } finally {
       setStreaming(false);
+      setActiveTools([]);
     }
   }, [input, streaming, id, baseUrl, token]);
 
@@ -151,15 +170,15 @@ export default function ConversationScreen() {
           style={[
             styles.bubble,
             isUser
-              ? { backgroundColor: colors.primary, maxWidth: "80%" }
+              ? { backgroundColor: colors.userBubble, maxWidth: "80%" }
               : { backgroundColor: colors.bubble, maxWidth: "85%", borderWidth: 1, borderColor: colors.border },
           ]}
         >
           {item.streaming && !item.content ? (
             <View style={styles.typingRow}>
-              <View style={[styles.dot, { backgroundColor: colors.mutedForeground }]} />
-              <View style={[styles.dot, { backgroundColor: colors.mutedForeground }]} />
-              <View style={[styles.dot, { backgroundColor: colors.mutedForeground }]} />
+              {[0, 1, 2].map((i) => (
+                <View key={i} style={[styles.dot, { backgroundColor: colors.mutedForeground }]} />
+              ))}
             </View>
           ) : (
             <Text style={[styles.bubbleText, { color: isUser ? "#fff" : colors.foreground }]}>
@@ -171,15 +190,21 @@ export default function ConversationScreen() {
     );
   };
 
+  const activeTool = activeTools.find((t) => t.status === "running" || t.status === "starting");
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View
         style={[
           styles.header,
-          { paddingTop: insets.top + (Platform.OS === "web" ? 67 : 12), borderBottomColor: colors.border, backgroundColor: colors.background },
+          {
+            paddingTop: insets.top + (Platform.OS === "web" ? 67 : 12),
+            borderBottomColor: colors.border,
+            backgroundColor: colors.background,
+          },
         ]}
       >
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
           <Feather name="arrow-left" size={22} color={colors.foreground} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.foreground }]} numberOfLines={1}>
@@ -199,10 +224,17 @@ export default function ConversationScreen() {
             keyExtractor={(item) => item.id}
             renderItem={renderMessage}
             inverted
-            contentContainerStyle={[
-              styles.list,
-              { paddingBottom: 8 + (Platform.OS === "web" ? 34 : 0) },
-            ]}
+            contentContainerStyle={styles.list}
+            ListHeaderComponent={
+              activeTool ? (
+                <View style={[styles.toolBanner, { backgroundColor: colors.accent + "15", borderColor: colors.accent + "30" }]}>
+                  <ActivityIndicator size="small" color={colors.accent} />
+                  <Text style={[styles.toolText, { color: colors.accent }]}>
+                    Đang dùng: {activeTool.name}
+                  </Text>
+                </View>
+              ) : null
+            }
             keyboardDismissMode="interactive"
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
@@ -215,14 +247,14 @@ export default function ConversationScreen() {
             {
               backgroundColor: colors.background,
               borderTopColor: colors.border,
-              paddingBottom: insets.bottom + (Platform.OS === "web" ? 34 : 8),
+              paddingBottom: insets.bottom + 8,
             },
           ]}
         >
           <View style={[styles.inputWrap, { backgroundColor: colors.input, borderColor: colors.border }]}>
             <TextInput
               style={[styles.textInput, { color: colors.foreground }]}
-              placeholder="Nhắn tin..."
+              placeholder="Tiếp tục hỏi..."
               placeholderTextColor={colors.mutedForeground}
               value={input}
               onChangeText={setInput}
@@ -258,19 +290,21 @@ const styles = StyleSheet.create({
   headerTitle: { flex: 1, fontSize: 16, fontWeight: "700", textAlign: "center" },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   list: { paddingHorizontal: 12, paddingTop: 12 },
-  msgRow: { flexDirection: "row", alignItems: "flex-end", marginBottom: 12, gap: 8 },
+  toolBanner: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    marginBottom: 8, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: 1,
+  },
+  toolText: { fontSize: 13, fontWeight: "500" },
+  msgRow: { flexDirection: "row", alignItems: "flex-end", marginBottom: 10, gap: 8 },
   msgRowUser: { justifyContent: "flex-end" },
   avatar: { width: 28, height: 28, borderRadius: 8, alignItems: "center", justifyContent: "center" },
   bubble: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 16 },
   bubbleText: { fontSize: 15, lineHeight: 22 },
   typingRow: { flexDirection: "row", gap: 5, paddingVertical: 4 },
   dot: { width: 6, height: 6, borderRadius: 3, opacity: 0.7 },
-  inputBar: {
-    flexDirection: "row", alignItems: "flex-end",
-    paddingHorizontal: 12, paddingTop: 8, borderTopWidth: 1,
-  },
+  inputBar: { paddingHorizontal: 12, paddingTop: 8, borderTopWidth: 1 },
   inputWrap: {
-    flex: 1, flexDirection: "row", alignItems: "flex-end",
+    flexDirection: "row", alignItems: "flex-end",
     borderRadius: 20, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 8, gap: 8,
   },
   textInput: { flex: 1, fontSize: 15, maxHeight: 120, paddingVertical: 2 },
