@@ -7,6 +7,8 @@ import filesRouter from "./files.js";
 import webscraperRouter from "./webscraper.js";
 import toolRequestsRouter from "./tool-requests.js";
 import usersRouter from "./users.js";
+import aiBrainRouter from "./ai-brain.js";
+import aiModelsRouter from "./ai-models.js";
 
 const router = Router();
 
@@ -18,5 +20,7 @@ router.use("/files", filesRouter);
 router.use("/webscraper", webscraperRouter);
 router.use("/tool-requests", toolRequestsRouter);
 router.use("/users", usersRouter);
+router.use("/ai-brain", aiBrainRouter);
+router.use("/ai-models", aiModelsRouter);
 
 export default router;

@@ -12,6 +12,9 @@ import ChatbotsPage from "@/pages/admin/chatbots";
 import ToolsPage from "@/pages/admin/tools";
 import SkillsPage from "@/pages/admin/skills";
 import ToolRequestsPage from "@/pages/admin/tool-requests";
+import UsersPage from "@/pages/admin/users";
+import AiBrainPage from "@/pages/admin/ai-brain";
+import AiModelsPage from "@/pages/admin/ai-models";
 import { useEffect } from "react";
 import { apiBase } from "@/lib/api";
 
@@ -19,9 +22,7 @@ const queryClient = new QueryClient();
 
 function KeepAlive() {
   useEffect(() => {
-    const ping = () => {
-      fetch(`${apiBase()}/healthz`).catch(() => {});
-    };
+    const ping = () => { fetch(`${apiBase()}/healthz`).catch(() => {}); };
     ping();
     const id = setInterval(ping, 4 * 60 * 1000);
     return () => clearInterval(id);
@@ -60,6 +61,21 @@ function Router() {
       <Route path="/files">
         <MainLayout title="Files" noPadding>
           <FilesPage />
+        </MainLayout>
+      </Route>
+      <Route path="/users">
+        <MainLayout title="Khách hàng">
+          <UsersPage />
+        </MainLayout>
+      </Route>
+      <Route path="/ai-brain">
+        <MainLayout title="Bộ não AI">
+          <AiBrainPage />
+        </MainLayout>
+      </Route>
+      <Route path="/ai-models">
+        <MainLayout title="Quản lý AI Model">
+          <AiModelsPage />
         </MainLayout>
       </Route>
       <Route component={NotFound} />

@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect } from "react";
-import { Code2, X, Send, Loader2, Bot, User, Minimize2, Maximize2 } from "lucide-react";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { Code2, X, Send, Loader2, Bot, User, Minimize2, Maximize2, GripVertical } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { MarkdownRenderer } from "@/components/markdown-renderer";
@@ -17,6 +17,8 @@ interface ToolCall {
 
 const QUICK_PROMPTS = ["Tạo tool mới", "Sửa system prompt", "Thêm chatbot", "Xem lỗi server"];
 
+const INITIAL_POS = { x: window.innerWidth - 64, y: window.innerHeight - 180 };
+
 export function AgentPopup() {
   const [open, setOpen] = useState(false);
   const [maximized, setMaximized] = useState(false);
@@ -27,10 +29,52 @@ export function AgentPopup() {
   const [convId, setConvId] = useState<number | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  /* ─── Draggable icon position ─── */
+  const [pos, setPos] = useState(INITIAL_POS);
+  const dragging = useRef(false);
+  const dragOffset = useRef({ x: 0, y: 0 });
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const hasMoved = useRef(false);
+
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, activeTools]);
 
+  const onMouseDown = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+    dragging.current = true;
+    hasMoved.current = false;
+    const clientX = "touches" in e ? e.touches[0].clientX : e.clientX;
+    const clientY = "touches" in e ? e.touches[0].clientY : e.clientY;
+    dragOffset.current = { x: clientX - pos.x, y: clientY - pos.y };
+    e.preventDefault();
+  }, [pos]);
+
+  useEffect(() => {
+    const onMove = (e: MouseEvent | TouchEvent) => {
+      if (!dragging.current) return;
+      const clientX = "touches" in e ? e.touches[0].clientX : e.clientX;
+      const clientY = "touches" in e ? e.touches[0].clientY : e.clientY;
+      const newX = Math.max(0, Math.min(window.innerWidth - 56, clientX - dragOffset.current.x));
+      const newY = Math.max(0, Math.min(window.innerHeight - 56, clientY - dragOffset.current.y));
+      setPos({ x: newX, y: newY });
+      hasMoved.current = true;
+    };
+    const onUp = () => { dragging.current = false; };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("touchmove", onMove, { passive: false });
+    window.addEventListener("mouseup", onUp);
+    window.addEventListener("touchend", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("touchmove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      window.removeEventListener("touchend", onUp);
+    };
+  }, []);
+
+  const handleIconClick = () => {
+    if (!hasMoved.current) setOpen(o => !o);
+  };
 
   const sendMessage = async (content: string) => {
     setLoading(true);
@@ -148,22 +192,25 @@ export function AgentPopup() {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void handleSend(); }
   };
 
-  // On mobile: full screen overlay. On desktop: corner popup or maximized
-  const isMobileFullscreen = open; // will be shown full screen on mobile via CSS
-
   return (
     <>
-      {/* Trigger button — always visible */}
+      {/* ── Draggable floating icon ── */}
       <button
-        onClick={() => setOpen(o => !o)}
+        ref={btnRef}
+        onMouseDown={onMouseDown}
+        onTouchStart={onMouseDown}
+        onClick={handleIconClick}
         title="AI Agent Developer"
-        className="fixed top-2 right-3 z-50 flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-violet-600 text-white text-xs font-semibold shadow-lg hover:bg-violet-700 active:scale-95 transition-all"
+        style={{ left: pos.x, top: pos.y, position: "fixed", touchAction: "none" }}
+        className="z-50 flex h-14 w-14 items-center justify-center rounded-full bg-violet-600 text-white shadow-2xl hover:bg-violet-700 active:scale-95 transition-colors select-none cursor-grab active:cursor-grabbing"
       >
-        <Code2 className="h-3.5 w-3.5" />
-        <span className="hidden sm:inline">AI Agent</span>
-        <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+        <div className="relative">
+          <Code2 className="h-6 w-6" />
+          <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-green-400 border-2 border-white animate-pulse" />
+        </div>
       </button>
 
+      {/* ── Chat panel ── */}
       {open && (
         <>
           {/* Mobile backdrop */}
@@ -171,9 +218,7 @@ export function AgentPopup() {
 
           <div className={[
             "fixed z-50 flex flex-col bg-background border border-border shadow-2xl overflow-hidden",
-            // Mobile: full screen minus top header
             "inset-x-0 bottom-0 top-12 rounded-t-2xl",
-            // Desktop: corner popup or maximized
             maximized
               ? "md:inset-4 md:rounded-2xl"
               : "md:top-14 md:right-4 md:bottom-auto md:left-auto md:w-[420px] md:h-[520px] md:rounded-2xl md:inset-x-auto",

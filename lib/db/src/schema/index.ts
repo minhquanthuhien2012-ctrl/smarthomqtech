@@ -25,3 +25,4 @@ export * from "./connections";
 export * from "./skills";
 export * from "./webscraper";
 export * from "./users";
+export * from "./ai-brain";
