@@ -1,0 +1,14 @@
+uploads = []
+outputs = []
+
+[[generated]]
+id = "13WLEFxBrthkinFa0Zqq3"
+uri = "file://artifacts/mobile/assets/images/icon.png"
+type = "image"
+title = "SmartHomeQ mobile app icon"
+
+[[generated]]
+id = "8gBBBYSzwXF3453EjizM5"
+uri = "file://artifacts/mobile/assets/images/splash.png"
+type = "image"
+title = "SmartHomeQ splash screen"
