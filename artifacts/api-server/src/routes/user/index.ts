@@ -60,7 +60,10 @@ router.patch("/chatbot", async (req: AuthRequest, res) => {
 
 router.get("/connections", async (req: AuthRequest, res) => {
   const rows = await db.select().from(userConnections).where(eq(userConnections.userId, req.userId!)).orderBy(desc(userConnections.createdAt));
-  res.json(rows);
+  res.json(rows.map(({ config, ...row }) => ({
+    ...row,
+    config: row.type === "facebook" ? {} : config,
+  })));
 });
 
 router.post("/connections", async (req: AuthRequest, res) => {
@@ -71,6 +74,10 @@ router.post("/connections", async (req: AuthRequest, res) => {
   });
   const parsed = Body.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: "Invalid body" }); return; }
+  if (parsed.data.type === "facebook") {
+    res.status(400).json({ error: "Facebook phải kết nối bằng nút Đăng nhập với Facebook" });
+    return;
+  }
   const [row] = await db.insert(userConnections).values({ userId: req.userId!, ...parsed.data }).returning();
   res.status(201).json(row);
 });

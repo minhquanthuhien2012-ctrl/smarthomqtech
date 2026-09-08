@@ -21,11 +21,14 @@ export const ALL_MODELS = [
   { provider: "gemini", modelId: "gemini-2.0-flash", label: "Gemini 2.0 Flash", baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai" },
   { provider: "gemini", modelId: "gemini-1.5-pro", label: "Gemini 1.5 Pro", baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai" },
   { provider: "gemini", modelId: "gemini-2.5-pro", label: "Gemini 2.5 Pro (Mới nhất)", baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai" },
-  // Groq
+  // Groq — production models listed in Groq's current model catalog.
+  // Removed deprecated entries: mixtral-8x7b-32768 and deepseek-r1-distill-llama-70b.
+  { provider: "groq", modelId: "openai/gpt-oss-120b", label: "GPT OSS 120B (Groq)", baseUrl: "https://api.groq.com/openai/v1" },
+  { provider: "groq", modelId: "openai/gpt-oss-20b", label: "GPT OSS 20B (Groq)", baseUrl: "https://api.groq.com/openai/v1" },
   { provider: "groq", modelId: "llama-3.3-70b-versatile", label: "Llama 3.3 70B (Groq)", baseUrl: "https://api.groq.com/openai/v1" },
   { provider: "groq", modelId: "llama-3.1-8b-instant", label: "Llama 3.1 8B Instant (Groq)", baseUrl: "https://api.groq.com/openai/v1" },
-  { provider: "groq", modelId: "mixtral-8x7b-32768", label: "Mixtral 8x7B (Groq)", baseUrl: "https://api.groq.com/openai/v1" },
-  { provider: "groq", modelId: "deepseek-r1-distill-llama-70b", label: "DeepSeek R1 Distill (Groq)", baseUrl: "https://api.groq.com/openai/v1" },
+  { provider: "groq", modelId: "groq/compound", label: "Groq Compound (web search + code)", baseUrl: "https://api.groq.com/openai/v1" },
+  { provider: "groq", modelId: "groq/compound-mini", label: "Groq Compound Mini (web search + code)", baseUrl: "https://api.groq.com/openai/v1" },
   // Mistral
   { provider: "mistral", modelId: "mistral-large-latest", label: "Mistral Large", baseUrl: "https://api.mistral.ai/v1" },
   { provider: "mistral", modelId: "mistral-small-latest", label: "Mistral Small", baseUrl: "https://api.mistral.ai/v1" },

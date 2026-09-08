@@ -83,3 +83,4 @@ packages = ["zip"]
 
 [userenv.shared]
 PRODUCTION_URL = "https://tao-server--minhquanthuhien.replit.app"
+META_APP_ID = "1991696004867770"
