@@ -1,5 +1,4 @@
 uploads = []
-outputs = []
 
 [[generated]]
 id = "13WLEFxBrthkinFa0Zqq3"
@@ -12,3 +11,17 @@ id = "8gBBBYSzwXF3453EjizM5"
 uri = "file://artifacts/mobile/assets/images/splash.png"
 type = "image"
 title = "SmartHomeQ splash screen"
+
+[[outputs]]
+id = "He9Co3aqm4G0wnAppJZG7"
+uri = "file://docs/google-ai-studio-smarthomeq-config.md"
+type = "text"
+title = "Cấu hình SmartHomeQ cho Google AI Studio"
+description = "System Instruction, function declarations, generation settings và runner fetch_url để sao chép sang Google AI Studio."
+logical_id = "24b59305-ca99-43cd-aed4-d6f3f890e0dc"
+content_hash = "sha256:7ac6086cdf9441f372df520afa64a69d2f08e4558d7218c0f55c866252201917"
+size = 14407
+mtime_ms = 1788862161422
+storage_uri = "gcs://replit-rams-assets-sisko/rams/assets/repl:e95a59b2-4a22-4037-a63c-50fa88012250/24b59305-ca99-43cd-aed4-d6f3f890e0dc/e6bd7bf6-701c-4ce2-9f5c-bbe3e3322698"
+storage_version_token = "1788862179071502"
+content_type = "text/markdown"
