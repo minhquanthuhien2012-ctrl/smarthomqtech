@@ -15,6 +15,7 @@ import ToolRequestsPage from "@/pages/admin/tool-requests";
 import UsersPage from "@/pages/admin/users";
 import AiBrainPage from "@/pages/admin/ai-brain";
 import AiModelsPage from "@/pages/admin/ai-models";
+import AiStaffPage from "@/pages/admin/ai-staff";
 import { useEffect } from "react";
 import { apiBase } from "@/lib/api";
 
@@ -39,8 +40,13 @@ function Router() {
         </MainLayout>
       </Route>
       <Route path="/chatbots">
-        <MainLayout title="Chatbots">
+        <MainLayout title="Quản lý Chatbot">
           <ChatbotsPage />
+        </MainLayout>
+      </Route>
+      <Route path="/ai-staff">
+        <MainLayout title="Quản lý nhân viên AI">
+          <AiStaffPage />
         </MainLayout>
       </Route>
       <Route path="/tools">

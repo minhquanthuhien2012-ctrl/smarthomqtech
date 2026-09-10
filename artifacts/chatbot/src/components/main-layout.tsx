@@ -3,7 +3,7 @@ import { Link, useLocation } from "wouter";
 import {
   MessageSquare, Bot, Wrench, Zap, FolderTree,
   Menu, ChevronRight, Home, ClipboardList, Users,
-  Brain, Cpu, Bell, BellRing, ToggleLeft, ToggleRight, Loader2, X
+  Brain, Cpu, Bell, BellRing, ToggleLeft, ToggleRight, Loader2, X, Sparkles
 } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
@@ -11,13 +11,14 @@ import { apiBase } from "@/lib/api";
 
 export const NAV_ITEMS = [
   { href: "/", label: "Chat", icon: MessageSquare, exact: true, group: "main" },
-  { href: "/chatbots", label: "Chatbots", icon: Bot, group: "manage" },
+  { href: "/chatbots", label: "Quản lý Chatbot", icon: Bot, group: "manage" },
   { href: "/tools", label: "Tools", icon: Wrench, group: "manage" },
   { href: "/skills", label: "Skills", icon: Zap, group: "manage" },
   { href: "/files", label: "Files", icon: FolderTree, group: "manage" },
   { href: "/tool-requests", label: "Yêu cầu Tool", icon: ClipboardList, group: "manage" },
   { href: "/users", label: "Khách hàng", icon: Users, group: "manage" },
   { href: "/ai-brain", label: "Bộ não AI", icon: Brain, group: "ai" },
+  { href: "/ai-staff", label: "Quản lý nhân viên AI", icon: Sparkles, group: "ai" },
   { href: "/ai-models", label: "AI Model", icon: Cpu, group: "ai" },
 ];
 
@@ -87,7 +88,9 @@ function NavContent({ location, onClose }: { location: string; onClose?: () => v
 
 /* Bottom tab bar — mobile only */
 function BottomNav({ location }: { location: string }) {
-  const visible = [NAV_ITEMS[0], NAV_ITEMS[1], NAV_ITEMS[2], NAV_ITEMS[3], NAV_ITEMS[7]]; // Chat, Chatbots, Tools, Skills, Bộ não AI
+  const visible = NAV_ITEMS.filter(item =>
+    ["/", "/chatbots", "/ai-staff", "/ai-brain"].includes(item.href),
+  );
   return (
     <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 flex border-t border-border bg-background/95 backdrop-blur-md safe-area-bottom">
       {visible.map(item => {

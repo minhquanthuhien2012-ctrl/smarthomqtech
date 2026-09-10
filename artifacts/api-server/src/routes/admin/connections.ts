@@ -9,7 +9,17 @@ const router = Router();
 
 const ConnectionBody = z.object({
   name: z.string().min(1),
-  type: z.enum(["zalo", "messenger", "xiaozhi", "webhook", "websocket"]),
+  type: z.enum([
+    "telegram",
+    "messenger",
+    "zalo_creator",
+    "zalo_oa",
+    "xiaozhi",
+    // Legacy values kept so existing connections remain editable.
+    "zalo",
+    "webhook",
+    "websocket",
+  ]),
   config: z.record(z.unknown()).default({}),
   isActive: z.boolean().default(true),
 });

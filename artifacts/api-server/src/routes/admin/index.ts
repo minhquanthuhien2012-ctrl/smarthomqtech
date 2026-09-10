@@ -9,6 +9,7 @@ import toolRequestsRouter from "./tool-requests.js";
 import usersRouter from "./users.js";
 import aiBrainRouter from "./ai-brain.js";
 import aiModelsRouter from "./ai-models.js";
+import aiStaffRouter from "./ai-staff.js";
 
 const router = Router();
 
@@ -22,5 +23,6 @@ router.use("/tool-requests", toolRequestsRouter);
 router.use("/users", usersRouter);
 router.use("/ai-brain", aiBrainRouter);
 router.use("/ai-models", aiModelsRouter);
+router.use("/ai-staff", aiStaffRouter);
 
 export default router;
