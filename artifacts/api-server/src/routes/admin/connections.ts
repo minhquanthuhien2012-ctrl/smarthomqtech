@@ -26,6 +26,42 @@ const ConnectionBody = z.object({
 
 const activeWsConnections = new Map<number, WebSocket>();
 
+function telegramConfigError(config: Record<string, unknown>) {
+  const botToken = typeof config.botToken === "string" ? config.botToken.trim() : "";
+  const chatId = typeof config.chatId === "string" ? config.chatId.trim() : "";
+
+  if (!botToken || !chatId) {
+    return "Telegram cần cả Bot Token và Chat ID";
+  }
+  return null;
+}
+
+async function verifyTelegram(botToken: string, chatId: string) {
+  const baseUrl = `https://api.telegram.org/bot${encodeURIComponent(botToken)}`;
+  const getMeResponse = await fetch(`${baseUrl}/getMe`, {
+    signal: AbortSignal.timeout(10000),
+  });
+  const getMeResult = await getMeResponse.json() as { ok?: boolean };
+
+  if (!getMeResponse.ok || !getMeResult.ok) {
+    throw new Error("Bot Token Telegram không hợp lệ");
+  }
+
+  const getChatResponse = await fetch(`${baseUrl}/getChat?chat_id=${encodeURIComponent(chatId)}`, {
+    signal: AbortSignal.timeout(10000),
+  });
+  const getChatResult = await getChatResponse.json() as {
+    ok?: boolean;
+    description?: string;
+  };
+
+  if (!getChatResponse.ok || !getChatResult.ok) {
+    throw new Error(getChatResult.description
+      ? `Chat ID Telegram không hợp lệ: ${getChatResult.description}`
+      : "Chat ID Telegram không hợp lệ hoặc bot chưa được thêm vào chat");
+  }
+}
+
 router.get("/", async (_req, res) => {
   const result = await db.select().from(connections).orderBy(connections.createdAt);
   res.json(result);
@@ -34,6 +70,10 @@ router.get("/", async (_req, res) => {
 router.post("/", async (req, res) => {
   const parsed = ConnectionBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: "Invalid body" }); return; }
+  if (parsed.data.type === "telegram") {
+    const configError = telegramConfigError(parsed.data.config);
+    if (configError) { res.status(400).json({ error: configError }); return; }
+  }
   const [row] = await db.insert(connections).values(parsed.data).returning();
   res.status(201).json(row);
 });
@@ -49,8 +89,15 @@ router.put("/:id", async (req, res) => {
   const id = Number(req.params.id);
   const parsed = ConnectionBody.partial().safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: "Invalid body" }); return; }
+  const [existing] = await db.select().from(connections).where(eq(connections.id, id));
+  if (!existing) { res.status(404).json({ error: "Not found" }); return; }
+  const nextType = parsed.data.type ?? existing.type;
+  const nextConfig = (parsed.data.config ?? existing.config) as Record<string, unknown>;
+  if (nextType === "telegram") {
+    const configError = telegramConfigError(nextConfig);
+    if (configError) { res.status(400).json({ error: configError }); return; }
+  }
   const [row] = await db.update(connections).set({ ...parsed.data, updatedAt: new Date() }).where(eq(connections.id, id)).returning();
-  if (!row) { res.status(404).json({ error: "Not found" }); return; }
   res.json(row);
 });
 
@@ -69,6 +116,30 @@ router.post("/:id/connect", async (req, res) => {
   if (!conn) { res.status(404).json({ error: "Not found" }); return; }
 
   const config = conn.config as Record<string, string>;
+
+  if (conn.type === "telegram") {
+    const configError = telegramConfigError(config);
+    if (configError) {
+      await db.update(connections).set({ status: "error", updatedAt: new Date() }).where(eq(connections.id, id));
+      res.status(400).json({ error: configError });
+      return;
+    }
+
+    try {
+      await verifyTelegram(config.botToken.trim(), config.chatId.trim());
+      await db.update(connections).set({
+        status: "connected",
+        lastConnectedAt: new Date(),
+        updatedAt: new Date(),
+      }).where(eq(connections.id, id));
+      res.json({ status: "connected" });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Không thể xác thực Telegram";
+      await db.update(connections).set({ status: "error", updatedAt: new Date() }).where(eq(connections.id, id));
+      res.status(502).json({ error: message });
+    }
+    return;
+  }
 
   if (conn.type === "xiaozhi") {
     const url = config.wsUrl ?? "";

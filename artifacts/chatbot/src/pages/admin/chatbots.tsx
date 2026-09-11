@@ -17,7 +17,14 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -55,9 +62,15 @@ const PLATFORMS: Platform[] = [
     fields: [
       {
         key: "botToken",
-        label: "Bot Token",
+        label: "Bot Token *",
         placeholder: "123456789:AA...",
         help: "Lấy từ BotFather trên Telegram.",
+      },
+      {
+        key: "chatId",
+        label: "Chat ID *",
+        placeholder: "Ví dụ: 123456789 hoặc @tenkenh",
+        help: "Chat ID của người dùng, nhóm hoặc channel mà bot được phép nhắn tin.",
       },
     ],
   },
@@ -207,6 +220,14 @@ export default function ChatbotsPage() {
 
   async function save() {
     if (!form.name.trim()) return;
+    if (form.type === "telegram" && (!form.config.botToken?.trim() || !form.config.chatId?.trim())) {
+      toast({
+        title: "Telegram cần Bot Token và Chat ID",
+        description: "Nhập đủ hai thông tin trước khi lưu và kết nối bot.",
+        variant: "destructive",
+      });
+      return;
+    }
     setSaving(true);
     try {
       const url = editingId
@@ -265,6 +286,14 @@ export default function ChatbotsPage() {
   }
 
   async function connect(item: ChatbotConnection) {
+    if (item.type === "telegram" && (!item.config.botToken?.trim() || !item.config.chatId?.trim())) {
+      toast({
+        title: "Chưa đủ cấu hình Telegram",
+        description: "Cần có cả Bot Token và Chat ID mới kết nối được.",
+        variant: "destructive",
+      });
+      return;
+    }
     setActingId(item.id);
     try {
       const response = await fetch(`${apiBase()}/admin/connections/${item.id}/connect`, { method: "POST" });
@@ -442,6 +471,9 @@ export default function ChatbotsPage() {
         <DialogContent className="max-h-[90dvh] w-[calc(100vw-2rem)] max-w-xl overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingId ? "Sửa chatbot" : "Tạo chatbot mới"}</DialogTitle>
+            <DialogDescription className="sr-only">
+              Nhập thông tin kết nối cho chatbot và nền tảng bạn muốn sử dụng.
+            </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-5">
