@@ -37,7 +37,7 @@ function telegramConfigError(config: Record<string, unknown>) {
 }
 
 async function verifyTelegram(botToken: string, chatId: string) {
-  const baseUrl = `https://api.telegram.org/bot${encodeURIComponent(botToken)}`;
+  const baseUrl = telegramBaseUrl(botToken);
   const getMeResponse = await fetch(`${baseUrl}/getMe`, {
     signal: AbortSignal.timeout(10000),
   });
@@ -59,6 +59,26 @@ async function verifyTelegram(botToken: string, chatId: string) {
     throw new Error(getChatResult.description
       ? `Chat ID Telegram không hợp lệ: ${getChatResult.description}`
       : "Chat ID Telegram không hợp lệ hoặc bot chưa được thêm vào chat");
+  }
+}
+
+function telegramBaseUrl(botToken: string) {
+  return `https://api.telegram.org/bot${encodeURIComponent(botToken)}`;
+}
+
+async function sendTelegramMessage(botToken: string, chatId: string, message: string) {
+  const response = await fetch(`${telegramBaseUrl(botToken)}/sendMessage`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ chat_id: chatId, text: message }),
+    signal: AbortSignal.timeout(10000),
+  });
+  const result = await response.json() as { ok?: boolean; description?: string };
+
+  if (!response.ok || !result.ok) {
+    throw new Error(result.description
+      ? `Telegram không gửi được tin: ${result.description}`
+      : "Telegram không gửi được tin test");
   }
 }
 
@@ -187,6 +207,46 @@ router.post("/:id/connect", async (req, res) => {
   }
 
   res.json({ status: "connected" });
+});
+
+router.post("/:id/test", async (req, res) => {
+  const id = Number(req.params.id);
+  const [conn] = await db.select().from(connections).where(eq(connections.id, id));
+  if (!conn) { res.status(404).json({ error: "Not found" }); return; }
+
+  const parsed = z.object({ message: z.string().trim().min(1).max(4096) }).safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Nội dung tin test không được để trống và tối đa 4096 ký tự" });
+    return;
+  }
+
+  if (conn.type !== "telegram") {
+    res.status(400).json({ error: "Hiện chỉ hỗ trợ gửi tin test cho Telegram" });
+    return;
+  }
+
+  const config = conn.config as Record<string, string>;
+  const configError = telegramConfigError(config);
+  if (configError) {
+    await db.update(connections).set({ status: "error", updatedAt: new Date() }).where(eq(connections.id, id));
+    res.status(400).json({ error: configError });
+    return;
+  }
+
+  try {
+    await verifyTelegram(config.botToken.trim(), config.chatId.trim());
+    await sendTelegramMessage(config.botToken.trim(), config.chatId.trim(), parsed.data.message);
+    await db.update(connections).set({
+      status: "connected",
+      lastConnectedAt: new Date(),
+      updatedAt: new Date(),
+    }).where(eq(connections.id, id));
+    res.json({ status: "sent" });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Gửi tin test thất bại";
+    await db.update(connections).set({ status: "error", updatedAt: new Date() }).where(eq(connections.id, id));
+    res.status(502).json({ error: message });
+  }
 });
 
 router.post("/:id/disconnect", async (req, res) => {

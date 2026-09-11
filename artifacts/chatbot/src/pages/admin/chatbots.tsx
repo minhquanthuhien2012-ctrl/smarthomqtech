@@ -10,6 +10,7 @@ import {
   Power,
   PowerOff,
   RefreshCw,
+  Send,
   Trash2,
   Wifi,
   WifiOff,
@@ -175,6 +176,9 @@ export default function ChatbotsPage() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [actingId, setActingId] = useState<number | null>(null);
+  const [testingId, setTestingId] = useState<number | null>(null);
+  const [testMessages, setTestMessages] = useState<Record<number, string>>({});
+  const [testResults, setTestResults] = useState<Record<number, { ok: boolean; message: string }>>({});
 
   async function load() {
     setLoading(true);
@@ -319,6 +323,50 @@ export default function ChatbotsPage() {
     setActingId(null);
   }
 
+  async function sendTestMessage(item: ChatbotConnection) {
+    if (item.type !== "telegram") {
+      setTestResults((current) => ({
+        ...current,
+        [item.id]: { ok: false, message: "Hiện chỉ hỗ trợ gửi tin test cho Telegram." },
+      }));
+      return;
+    }
+
+    const message = testMessages[item.id]?.trim() || "Tin nhắn kiểm tra từ SmartHomeQ";
+    setTestingId(item.id);
+    setTestResults((current) => {
+      const next = { ...current };
+      delete next[item.id];
+      return next;
+    });
+
+    try {
+      const response = await fetch(`${apiBase()}/admin/connections/${item.id}/test`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message }),
+      });
+      const result = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(result.error ?? "Gửi tin test thất bại");
+
+      setTestResults((current) => ({
+        ...current,
+        [item.id]: { ok: true, message: "Đã gửi tin test thành công. Hãy kiểm tra chat đích." },
+      }));
+      await load();
+    } catch (error) {
+      setTestResults((current) => ({
+        ...current,
+        [item.id]: {
+          ok: false,
+          message: error instanceof Error ? error.message : "Gửi tin test thất bại",
+        },
+      }));
+    } finally {
+      setTestingId(null);
+    }
+  }
+
   const selectedPlatform = platformFor(form.type);
 
   return (
@@ -401,6 +449,59 @@ export default function ChatbotsPage() {
                 <span>{STATUS_LABELS[item.status] ?? item.status}</span>
                 <span>•</span>
                 <span>{item.isActive ? "Bot đang bật" : "Bot đang tắt"}</span>
+              </div>
+
+              <div className="rounded-xl border bg-muted/20 p-3">
+                <div className="flex items-center gap-2">
+                  <Send className="h-4 w-4 text-primary" />
+                  <p className="text-sm font-semibold">Gửi tin test</p>
+                  {item.type === "telegram" && <Badge variant="secondary" className="text-[10px]">Telegram</Badge>}
+                </div>
+                {item.type === "telegram" ? (
+                  <>
+                    <div className="mt-2 flex gap-2">
+                      <Input
+                        value={testMessages[item.id] ?? ""}
+                        onChange={(event) => setTestMessages((current) => ({
+                          ...current,
+                          [item.id]: event.target.value,
+                        }))}
+                        placeholder="Tin nhắn kiểm tra từ SmartHomeQ"
+                        maxLength={4096}
+                        disabled={testingId === item.id}
+                        className="h-9 text-sm"
+                      />
+                      <Button
+                        size="sm"
+                        onClick={() => void sendTestMessage(item)}
+                        disabled={
+                          testingId === item.id
+                          || !item.config.botToken?.trim()
+                          || !item.config.chatId?.trim()
+                        }
+                      >
+                        {testingId === item.id
+                          ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                          : <Send className="mr-1.5 h-3.5 w-3.5" />}
+                        Gửi
+                      </Button>
+                    </div>
+                    {(!item.config.botToken?.trim() || !item.config.chatId?.trim()) && (
+                      <p className="mt-2 text-[11px] text-amber-500">
+                        Cần nhập Bot Token và Chat ID trước khi gửi tin test.
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <p className="mt-2 text-[11px] text-muted-foreground">
+                    Gửi tin test hiện được hỗ trợ cho Telegram. Adapter cho nền tảng này sẽ được bổ sung sau.
+                  </p>
+                )}
+                {testResults[item.id] && (
+                  <p className={`mt-2 text-xs ${testResults[item.id].ok ? "text-green-600" : "text-destructive"}`}>
+                    {testResults[item.id].ok ? "✓" : "✕"} {testResults[item.id].message}
+                  </p>
+                )}
               </div>
 
               {item.type === "messenger" && (
