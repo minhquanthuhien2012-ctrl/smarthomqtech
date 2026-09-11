@@ -1,1 +1,2 @@
 - [AI ca nhan webapp design](ai-ca-nhan-design.md) — full spec for SmartHomeQ web app "AI cá nhân": chat + tool/skill request system + 4-tab webscraper
+- [Webhook domain routing](webhook-domain-routing.md) — development webhooks must use the live REPLIT_DEV_DOMAIN, not an unpublished production URL
