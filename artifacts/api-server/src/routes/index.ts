@@ -2,7 +2,7 @@ import { Router, type IRouter } from "express";
 import healthRouter from "./health";
 import anthropicRouter from "./anthropic/index.js";
 import adminRouter from "./admin/index.js";
-import webhooksRouter from "./webhooks/zalo.js";
+import webhooksRouter from "./webhooks/index.js";
 import configRouter from "./config.js";
 import authRouter from "./auth.js";
 import userRouter from "./user/index.js";

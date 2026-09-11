@@ -4,6 +4,13 @@ import { connections } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import WebSocket from "ws";
+import {
+  deleteTelegramWebhook,
+  sendTelegramMessage,
+  setTelegramWebhook,
+  verifyTelegram,
+} from "../../lib/telegram.js";
+import { getWebhookBaseUrl } from "../../lib/webhook-url.js";
 
 const router = Router();
 
@@ -34,52 +41,6 @@ function telegramConfigError(config: Record<string, unknown>) {
     return "Telegram cần cả Bot Token và Chat ID";
   }
   return null;
-}
-
-async function verifyTelegram(botToken: string, chatId: string) {
-  const baseUrl = telegramBaseUrl(botToken);
-  const getMeResponse = await fetch(`${baseUrl}/getMe`, {
-    signal: AbortSignal.timeout(10000),
-  });
-  const getMeResult = await getMeResponse.json() as { ok?: boolean };
-
-  if (!getMeResponse.ok || !getMeResult.ok) {
-    throw new Error("Bot Token Telegram không hợp lệ");
-  }
-
-  const getChatResponse = await fetch(`${baseUrl}/getChat?chat_id=${encodeURIComponent(chatId)}`, {
-    signal: AbortSignal.timeout(10000),
-  });
-  const getChatResult = await getChatResponse.json() as {
-    ok?: boolean;
-    description?: string;
-  };
-
-  if (!getChatResponse.ok || !getChatResult.ok) {
-    throw new Error(getChatResult.description
-      ? `Chat ID Telegram không hợp lệ: ${getChatResult.description}`
-      : "Chat ID Telegram không hợp lệ hoặc bot chưa được thêm vào chat");
-  }
-}
-
-function telegramBaseUrl(botToken: string) {
-  return `https://api.telegram.org/bot${encodeURIComponent(botToken)}`;
-}
-
-async function sendTelegramMessage(botToken: string, chatId: string, message: string) {
-  const response = await fetch(`${telegramBaseUrl(botToken)}/sendMessage`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ chat_id: chatId, text: message }),
-    signal: AbortSignal.timeout(10000),
-  });
-  const result = await response.json() as { ok?: boolean; description?: string };
-
-  if (!response.ok || !result.ok) {
-    throw new Error(result.description
-      ? `Telegram không gửi được tin: ${result.description}`
-      : "Telegram không gửi được tin test");
-  }
 }
 
 router.get("/", async (_req, res) => {
@@ -147,12 +108,18 @@ router.post("/:id/connect", async (req, res) => {
 
     try {
       await verifyTelegram(config.botToken.trim(), config.chatId.trim());
+      const webhookBase = getWebhookBaseUrl();
+      if (!webhookBase.startsWith("https://")) {
+        throw new Error("Chưa có public HTTPS URL để nhận webhook Telegram");
+      }
+      const webhookUrl = `${webhookBase}/api/webhooks/telegram/${id}`;
+      await setTelegramWebhook(config.botToken.trim(), webhookUrl, id);
       await db.update(connections).set({
         status: "connected",
         lastConnectedAt: new Date(),
         updatedAt: new Date(),
       }).where(eq(connections.id, id));
-      res.json({ status: "connected" });
+      res.json({ status: "connected", webhookUrl });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Không thể xác thực Telegram";
       await db.update(connections).set({ status: "error", updatedAt: new Date() }).where(eq(connections.id, id));
@@ -235,6 +202,15 @@ router.post("/:id/test", async (req, res) => {
 
   try {
     await verifyTelegram(config.botToken.trim(), config.chatId.trim());
+    const webhookBase = getWebhookBaseUrl();
+    if (!webhookBase.startsWith("https://")) {
+      throw new Error("Chưa có public HTTPS URL để nhận webhook Telegram");
+    }
+    await setTelegramWebhook(
+      config.botToken.trim(),
+      `${webhookBase}/api/webhooks/telegram/${id}`,
+      id,
+    );
     await sendTelegramMessage(config.botToken.trim(), config.chatId.trim(), parsed.data.message);
     await db.update(connections).set({
       status: "connected",
@@ -251,8 +227,13 @@ router.post("/:id/test", async (req, res) => {
 
 router.post("/:id/disconnect", async (req, res) => {
   const id = Number(req.params.id);
+  const [conn] = await db.select().from(connections).where(eq(connections.id, id));
   const ws = activeWsConnections.get(id);
   if (ws) { ws.terminate(); activeWsConnections.delete(id); }
+  if (conn?.type === "telegram") {
+    const config = conn.config as Record<string, string>;
+    if (config.botToken) await deleteTelegramWebhook(config.botToken);
+  }
   await db.update(connections).set({ status: "disconnected", updatedAt: new Date() }).where(eq(connections.id, id));
   res.json({ status: "disconnected" });
 });
